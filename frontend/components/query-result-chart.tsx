@@ -89,12 +89,16 @@ export function QueryResultChart({ columns, rows }: QueryResultChartProps) {
       <p className="mb-2 text-muted-foreground text-xs">Chart Preview</p>
       <div className="h-72 w-full">
         <ResponsiveContainer height="100%" width="100%">
-          <BarChart data={chartRows} margin={{ top: 8, right: 8, bottom: 8, left: 4 }}>
+          <BarChart data={chartRows} margin={{ top: 8, right: 8, bottom: 48, left: 4 }}>
             <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
             <XAxis
+              angle={-35}
               axisLine={false}
               dataKey="label"
+              height={56}
               interval={0}
+              minTickGap={0}
+              textAnchor="end"
               tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
               tickLine={false}
               tickMargin={8}

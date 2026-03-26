@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PlotlyFigureChart } from "@/components/plotly-figure-chart";
 import { QueryResultChart } from "@/components/query-result-chart";
 
 type SQLTransparencyPanelProps = {
@@ -12,6 +13,21 @@ type SQLTransparencyPanelProps = {
   queryRows?: Array<Record<string, unknown>>;
   rowCount?: number;
   visualizationCode?: string;
+  visualizationFigure?: {
+    data?: unknown[];
+    layout?: Record<string, unknown>;
+    frames?: unknown[];
+    config?: Record<string, unknown>;
+  };
+  visualizationMeta?: {
+    source?: string;
+    source_row_count?: number;
+    source_column_count?: number;
+    source_columns?: string[];
+    source_data_sha256?: string;
+    visualization_code_sha256?: string;
+    plotly_trace_count?: number;
+  };
   relevantQuestions?: string[];
 };
 
@@ -22,6 +38,8 @@ export function SQLTransparencyPanel({
   queryRows,
   rowCount,
   visualizationCode,
+  visualizationFigure,
+  visualizationMeta,
   relevantQuestions,
 }: SQLTransparencyPanelProps) {
   const [showAllRows, setShowAllRows] = useState(false);
@@ -77,6 +95,7 @@ export function SQLTransparencyPanel({
     Boolean(queryRows?.length) ||
     typeof rowCount === "number" ||
     Boolean(visualizationCode) ||
+    Boolean(visualizationFigure?.data?.length) ||
     Boolean(relevantQuestions?.length);
 
   if (!hasContent) {
@@ -174,8 +193,43 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
+      {!!visualizationFigure?.data?.length && (
+        <div className="mb-3">
+          <p className="mb-2 text-muted-foreground text-xs">
+            Deterministic Chart 1 (Original Plotly)
+          </p>
+          <PlotlyFigureChart figure={visualizationFigure} mode="original" />
+          <p className="mb-2 mt-3 text-muted-foreground text-xs">
+            Deterministic Chart 2 (Normalized Theme)
+          </p>
+          <PlotlyFigureChart figure={visualizationFigure} mode="normalized" />
+          {visualizationMeta && (
+            <div className="mt-2 rounded-md border bg-muted/30 p-2 text-xs">
+              <p className="font-medium">Data Fidelity</p>
+              <p className="mt-1 text-muted-foreground">
+                Source: {visualizationMeta.source || "sql_result_dataframe"} | Rows: {visualizationMeta.source_row_count ?? "-"} | Columns: {visualizationMeta.source_column_count ?? "-"} | Traces: {visualizationMeta.plotly_trace_count ?? "-"}
+              </p>
+              {visualizationMeta.source_data_sha256 && (
+                <p className="mt-1 break-all text-muted-foreground">
+                  Data SHA-256: {visualizationMeta.source_data_sha256}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!!visualizationCode && !visualizationFigure?.data?.length && (
+        <div className="mb-3 rounded-md border border-amber-300/60 bg-amber-50/40 p-2 text-xs text-amber-900">
+          Deterministic Plotly chart is unavailable for this response. Showing heuristic fallback below.
+        </div>
+      )}
+
       {!!queryRows?.length && !!columns?.length && !!visualizationCode && (
         <div className="mb-3">
+          <p className="mb-2 text-muted-foreground text-xs">
+            Heuristic Chart 3 (table-based fallback)
+          </p>
           <QueryResultChart columns={columns} rows={queryRows} />
         </div>
       )}

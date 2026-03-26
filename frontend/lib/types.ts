@@ -25,6 +25,21 @@ export type CustomUIDataTypes = {
     data?: Array<Record<string, unknown>>;
   };
   visualizationCode: string;
+  visualizationFigure: {
+    data?: unknown[];
+    layout?: Record<string, unknown>;
+    frames?: unknown[];
+    config?: Record<string, unknown>;
+  };
+  visualizationMeta: {
+    source?: string;
+    source_row_count?: number;
+    source_column_count?: number;
+    source_columns?: string[];
+    source_data_sha256?: string;
+    visualization_code_sha256?: string;
+    plotly_trace_count?: number;
+  };
   sqlRowCount: number;
   relevantQuestions: string[];
   suggestion: Suggestion;

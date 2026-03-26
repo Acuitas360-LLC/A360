@@ -83,6 +83,35 @@ const PurePreviewMessage = ({
   const visualizationCode = message.parts.find(
     (part) => part.type === "data-visualizationCode"
   ) as { type: "data-visualizationCode"; data: string } | undefined;
+  const visualizationFigure = message.parts.find(
+    (part) => part.type === "data-visualizationFigure"
+  ) as
+    | {
+        type: "data-visualizationFigure";
+        data: {
+          data?: unknown[];
+          layout?: Record<string, unknown>;
+          frames?: unknown[];
+          config?: Record<string, unknown>;
+        };
+      }
+    | undefined;
+  const visualizationMeta = message.parts.find(
+    (part) => part.type === "data-visualizationMeta"
+  ) as
+    | {
+        type: "data-visualizationMeta";
+        data: {
+          source?: string;
+          source_row_count?: number;
+          source_column_count?: number;
+          source_columns?: string[];
+          source_data_sha256?: string;
+          visualization_code_sha256?: string;
+          plotly_trace_count?: number;
+        };
+      }
+    | undefined;
   const relevantQuestions = message.parts.find(
     (part) => part.type === "data-relevantQuestions"
   ) as { type: "data-relevantQuestions"; data: string[] } | undefined;
@@ -150,6 +179,8 @@ const PurePreviewMessage = ({
               rowCount={sqlRowCount?.data}
               sqlQuery={sqlQuery?.data}
               visualizationCode={visualizationCode?.data}
+              visualizationFigure={visualizationFigure?.data}
+              visualizationMeta={visualizationMeta?.data}
             />
           )}
 

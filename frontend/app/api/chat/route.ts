@@ -25,6 +25,21 @@ type BackendChatResponse = {
     data?: Array<Record<string, unknown>>;
   };
   visualization_code?: string;
+  visualization_figure?: {
+    data?: unknown[];
+    layout?: Record<string, unknown>;
+    frames?: unknown[];
+    config?: Record<string, unknown>;
+  };
+  visualization_meta?: {
+    source?: string;
+    source_row_count?: number;
+    source_column_count?: number;
+    source_columns?: string[];
+    source_data_sha256?: string;
+    visualization_code_sha256?: string;
+    plotly_trace_count?: number;
+  };
 };
 
 function extractQuestion(body: { message?: RequestMessage; messages?: RequestMessage[] }): string {
@@ -134,6 +149,20 @@ export async function POST(req: Request) {
           writer.write({
             type: "data-visualizationCode",
             data: payload.visualization_code,
+          });
+        }
+
+        if (payload.visualization_figure) {
+          writer.write({
+            type: "data-visualizationFigure",
+            data: payload.visualization_figure,
+          });
+        }
+
+        if (payload.visualization_meta) {
+          writer.write({
+            type: "data-visualizationMeta",
+            data: payload.visualization_meta,
           });
         }
 
