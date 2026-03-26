@@ -1,0 +1,26 @@
+{
+  "chats": [
+    {
+      "id": "0f49bdc7-0140-4976-a666-f46e7becdc23",
+      "createdAt": "2026-03-25T20:42:18.828Z",
+      "title": "hi",
+      "userId": "local-user",
+      "visibility": "private"
+    },
+    {
+      "id": "a42f623d-ba12-4d7b-8db8-e97aeefbb8e9",
+      "createdAt": "2026-03-25T20:44:14.220Z",
+      "title": "persistent local storage for chats and votes in Next.js routes now, including hi",
+      "userId": "local-user",
+      "visibility": "private"
+    },
+    {
+      "id": "1edb8f88-ad2f-456c-bf7a-5b9e2795df3c",
+      "createdAt": "2026-03-25T20:44:25.555Z",
+      "title": "Write code to demonstrate Dijkstra's algorithm",
+      "userId": "local-user",
+      "visibility": "private"
+    }
+  ],
+  "votes": []
+}

@@ -12,6 +12,7 @@ import {
   SidebarHistory,
 } from "@/components/sidebar-history";
 import type { User } from "@/lib/db/schema";
+import { generateThreadId } from "@/lib/utils";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +44,12 @@ export function AppSidebar({ user }: { user: User | undefined }) {
   const handleDeleteAll = () => {
     const deletePromise = fetch("/api/history", {
       method: "DELETE",
+    }).then(async (response) => {
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Failed to delete all chats");
+      }
+      return response.json();
     });
 
     toast.promise(deletePromise, {
@@ -76,30 +83,28 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                 </span>
               </Link>
               <div className="flex flex-row gap-1">
-                {user && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        className="h-8 p-1 md:h-fit md:p-2"
-                        onClick={() => setShowDeleteAllDialog(true)}
-                        type="button"
-                        variant="ghost"
-                      >
-                        <TrashIcon />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent align="end" className="hidden md:block">
-                      Delete All Chats
-                    </TooltipContent>
-                  </Tooltip>
-                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      className="h-8 p-1 md:h-fit md:p-2"
+                      onClick={() => setShowDeleteAllDialog(true)}
+                      type="button"
+                      variant="ghost"
+                    >
+                      <TrashIcon />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent align="end" className="hidden md:block">
+                    Delete All Chats
+                  </TooltipContent>
+                </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       className="h-8 p-1 md:h-fit md:p-2"
                       onClick={() => {
                         setOpenMobile(false);
-                        router.push("/");
+                        router.push(`/chat/${generateThreadId()}`);
                         router.refresh();
                       }}
                       type="button"

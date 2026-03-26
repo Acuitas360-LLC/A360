@@ -22,9 +22,12 @@ import { MessageActions } from "./message-actions";
 import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
+import { SQLTransparencyPanel } from "./sql-transparency-panel";
+import { Button } from "./ui/button";
 import { Weather } from "./weather";
 
 const ANALYTICS_RESPONSE_MARKER = "[[ANALYTICS_52_WEEKS_RESPONSE]]";
+const ERROR_RESPONSE_MARKER = "[[ERROR_RESPONSE]]";
 
 const PurePreviewMessage = ({
   addToolApprovalResponse,
@@ -36,6 +39,8 @@ const PurePreviewMessage = ({
   regenerate,
   isReadonly,
   requiresScrollPadding: _requiresScrollPadding,
+  onEditFailedResponse,
+  onRetryFailedResponse,
 }: {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   chatId: string;
@@ -46,12 +51,41 @@ const PurePreviewMessage = ({
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   isReadonly: boolean;
   requiresScrollPadding: boolean;
+  onEditFailedResponse?: (errorMessageId: string) => void;
+  onRetryFailedResponse?: (errorMessageId: string) => void;
 }) => {
   const [mode, setMode] = useState<"view" | "edit">("view");
 
   const attachmentsFromMessage = message.parts.filter(
     (part) => part.type === "file"
   );
+
+  const sqlQuery = message.parts.find(
+    (part) => part.type === "data-sqlQuery"
+  ) as { type: "data-sqlQuery"; data: string } | undefined;
+  const resultSummary = message.parts.find(
+    (part) => part.type === "data-resultSummary"
+  ) as { type: "data-resultSummary"; data: string } | undefined;
+  const sqlColumns = message.parts.find(
+    (part) => part.type === "data-sqlColumns"
+  ) as { type: "data-sqlColumns"; data: string[] } | undefined;
+  const sqlResult = message.parts.find(
+    (part) => part.type === "data-sqlResult"
+  ) as
+    | {
+        type: "data-sqlResult";
+        data: { columns?: string[]; data?: Array<Record<string, unknown>> };
+      }
+    | undefined;
+  const sqlRowCount = message.parts.find(
+    (part) => part.type === "data-sqlRowCount"
+  ) as { type: "data-sqlRowCount"; data: number } | undefined;
+  const visualizationCode = message.parts.find(
+    (part) => part.type === "data-visualizationCode"
+  ) as { type: "data-visualizationCode"; data: string } | undefined;
+  const relevantQuestions = message.parts.find(
+    (part) => part.type === "data-relevantQuestions"
+  ) as { type: "data-relevantQuestions"; data: string[] } | undefined;
 
   useDataStream();
 
@@ -107,9 +141,25 @@ const PurePreviewMessage = ({
             </div>
           )}
 
+          {message.role === "assistant" && (
+            <SQLTransparencyPanel
+              columns={sqlColumns?.data || sqlResult?.data?.columns}
+              queryRows={sqlResult?.data?.data}
+              relevantQuestions={relevantQuestions?.data}
+              resultSummary={resultSummary?.data}
+              rowCount={sqlRowCount?.data}
+              sqlQuery={sqlQuery?.data}
+              visualizationCode={visualizationCode?.data}
+            />
+          )}
+
           {message.parts?.map((part, index) => {
             const { type } = part;
             const key = `message-${message.id}-part-${index}`;
+
+            if (type.startsWith("data-")) {
+              return null;
+            }
 
             if (type === "reasoning") {
               const hasContent = part.text?.trim().length > 0;
@@ -135,6 +185,45 @@ const PurePreviewMessage = ({
                   return (
                     <div className="w-full" key={key}>
                       <AnalyticsInsight />
+                    </div>
+                  );
+                }
+
+                if (
+                  message.role === "assistant" &&
+                  part.text.includes(ERROR_RESPONSE_MARKER)
+                ) {
+                  const errorText = part.text
+                    .replace(ERROR_RESPONSE_MARKER, "")
+                    .trim();
+
+                  return (
+                    <div className="w-full" key={key}>
+                      <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
+                        <p className="font-medium text-sm">I couldn't generate a response.</p>
+                        <p className="mt-1 text-muted-foreground text-sm">
+                          {errorText ||
+                            "Something went wrong while processing your request. Please try again."}
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <Button
+                            onClick={() => onRetryFailedResponse?.(message.id)}
+                            size="sm"
+                            type="button"
+                            variant="secondary"
+                          >
+                            Retry
+                          </Button>
+                          <Button
+                            onClick={() => onEditFailedResponse?.(message.id)}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            Edit and resend
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   );
                 }

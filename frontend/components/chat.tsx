@@ -34,6 +34,7 @@ import type { VisibilityType } from "./visibility-selector";
 
 const ANALYTICS_DEMO_TRIGGER = "give me my last 52 weeks analytics";
 const ANALYTICS_RESPONSE_MARKER = "[[ANALYTICS_52_WEEKS_RESPONSE]]";
+const ERROR_RESPONSE_MARKER = "[[ERROR_RESPONSE]]";
 const ANALYTICS_RESPONSE_DELAY_MS = 1200;
 
 export function Chat({
@@ -75,7 +76,14 @@ export function Chat({
   const [input, setInput] = useState<string>("");
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
+  const [bulkQueue, setBulkQueue] = useState<{
+    active: boolean;
+    questions: string[];
+    index: number;
+  }>({ active: false, questions: [], index: 0 });
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
+  const [failedPromptByErrorMessageId, setFailedPromptByErrorMessageId] =
+    useState<Record<string, string>>({});
   const currentModelIdRef = useRef(currentModelId);
   const analyticsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -154,6 +162,64 @@ export function Chat({
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
+      const lastUserMessage = [...messages]
+        .reverse()
+        .find((msg) => msg.role === "user");
+      const lastUserText =
+        lastUserMessage?.parts
+          ?.filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("\n")
+          .trim() || "";
+
+      const inlineErrorText =
+        error instanceof ChatbotError
+          ? error.message
+          : "Something went wrong while processing your request.";
+
+      const inlineErrorMessageId = generateUUID();
+
+      if (lastUserText) {
+        setFailedPromptByErrorMessageId((current) => ({
+          ...current,
+          [inlineErrorMessageId]: lastUserText,
+        }));
+      }
+
+      setMessages((currentMessages) => {
+        const alreadyHasErrorMessage = currentMessages.some(
+          (msg) =>
+            msg.role === "assistant" &&
+            msg.parts?.some(
+              (part) =>
+                part.type === "text" &&
+                part.text.includes(ERROR_RESPONSE_MARKER)
+            )
+        );
+
+        if (alreadyHasErrorMessage) {
+          return currentMessages;
+        }
+
+        return [
+          ...currentMessages,
+          {
+            id: inlineErrorMessageId,
+            role: "assistant",
+            parts: [
+              {
+                type: "text",
+                text: `${ERROR_RESPONSE_MARKER} ${inlineErrorText}`,
+              },
+            ],
+          },
+        ];
+      });
+
+      if (bulkQueue.active) {
+        setBulkQueue({ active: false, questions: [], index: 0 });
+      }
+
       if (error.message?.includes("AI Gateway requires a valid credit card")) {
         setShowCreditCardAlert(true);
       } else if (error instanceof ChatbotError) {
@@ -165,6 +231,13 @@ export function Chat({
         toast({
           type: "error",
           description: error.message || "Oops, an error occurred!",
+        });
+      }
+
+      if (bulkQueue.active) {
+        toast({
+          type: "error",
+          description: "Bulk run stopped due to an error. You can retry from Bulk Upload.",
         });
       }
     },
@@ -218,6 +291,104 @@ export function Chat({
     [sendMessage, setMessages]
   );
 
+  const handleRetryFailedResponse = useCallback(
+    (errorMessageId: string) => {
+      const failedPrompt = failedPromptByErrorMessageId[errorMessageId]?.trim();
+      if (!failedPrompt) {
+        toast({
+          type: "error",
+          description: "No failed prompt found to retry.",
+        });
+        return;
+      }
+
+      sendMessageWithDemo({
+        role: "user",
+        parts: [{ type: "text", text: failedPrompt }],
+      });
+    },
+    [failedPromptByErrorMessageId, sendMessageWithDemo]
+  );
+
+  const handleEditFailedResponse = useCallback(
+    (errorMessageId: string) => {
+      const failedPrompt = failedPromptByErrorMessageId[errorMessageId]?.trim();
+      if (!failedPrompt) {
+        toast({
+          type: "error",
+          description: "No failed prompt found to edit.",
+        });
+        return;
+      }
+
+      setInput(failedPrompt);
+    },
+    [failedPromptByErrorMessageId]
+  );
+
+  useEffect(() => {
+    if (!bulkQueue.active) {
+      return;
+    }
+
+    if (status !== "ready") {
+      return;
+    }
+
+    if (bulkQueue.index >= bulkQueue.questions.length) {
+      toast({
+        type: "success",
+        description: "Bulk run complete",
+      });
+      setBulkQueue({ active: false, questions: [], index: 0 });
+      return;
+    }
+
+    const currentQuestion = bulkQueue.questions[bulkQueue.index];
+    if (!currentQuestion?.trim()) {
+      setBulkQueue((current) => ({
+        ...current,
+        index: current.index + 1,
+      }));
+      return;
+    }
+
+    sendMessageWithDemo({
+      role: "user",
+      parts: [{ type: "text", text: currentQuestion }],
+    });
+
+    setBulkQueue((current) => ({
+      ...current,
+      index: current.index + 1,
+    }));
+  }, [bulkQueue, sendMessageWithDemo, status]);
+
+  const handleBulkUploadStart = useCallback((questions: string[]) => {
+    const normalizedQuestions = questions
+      .map((question) => question.trim())
+      .filter((question) => question.length > 0);
+
+    if (normalizedQuestions.length === 0) {
+      toast({
+        type: "error",
+        description: "No valid questions found in selected column",
+      });
+      return;
+    }
+
+    setBulkQueue({
+      active: true,
+      questions: normalizedQuestions,
+      index: 0,
+    });
+
+    toast({
+      type: "success",
+      description: `Bulk run started for ${normalizedQuestions.length} questions`,
+    });
+  }, []);
+
   const effectiveStatus = isAnalyticsLoading ? "submitted" : status;
 
   const searchParams = useSearchParams();
@@ -267,6 +438,8 @@ export function Chat({
           isArtifactVisible={isArtifactVisible}
           isReadonly={isReadonly}
           messages={messages}
+          onEditFailedResponse={handleEditFailedResponse}
+          onRetryFailedResponse={handleRetryFailedResponse}
           regenerate={regenerate}
           selectedModelId={initialChatModel}
           setMessages={setMessages}
@@ -281,6 +454,7 @@ export function Chat({
               chatId={id}
               input={input}
               messages={messages}
+              onBulkUploadStart={handleBulkUploadStart}
               onModelChange={setCurrentModelId}
               selectedModelId={currentModelId}
               selectedVisibilityType={visibilityType}

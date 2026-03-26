@@ -23,6 +23,7 @@ export function PureMessageActions({
 }) {
   const { mutate } = useSWRConfig();
   const [_, copyToClipboard] = useCopyToClipboard();
+  const hasSubmittedFeedback = Boolean(vote);
 
   if (isLoading) {
     return null;
@@ -75,7 +76,7 @@ export function PureMessageActions({
 
       <Action
         data-testid="message-upvote"
-        disabled={vote?.isUpvoted}
+        disabled={hasSubmittedFeedback}
         onClick={() => {
           const upvote = fetch("/api/vote", {
             method: "PATCH",
@@ -124,7 +125,7 @@ export function PureMessageActions({
 
       <Action
         data-testid="message-downvote"
-        disabled={vote && !vote.isUpvoted}
+        disabled={hasSubmittedFeedback}
         onClick={() => {
           const downvote = fetch("/api/vote", {
             method: "PATCH",

@@ -17,6 +17,16 @@ export type CustomUIDataTypes = {
   imageDelta: string;
   sheetDelta: string;
   codeDelta: string;
+  sqlQuery: string;
+  resultSummary: string;
+  sqlColumns: string[];
+  sqlResult: {
+    columns?: string[];
+    data?: Array<Record<string, unknown>>;
+  };
+  visualizationCode: string;
+  sqlRowCount: number;
+  relevantQuestions: string[];
   suggestion: Suggestion;
   appendMessage: string;
   id: string;

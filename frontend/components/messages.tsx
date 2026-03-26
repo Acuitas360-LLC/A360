@@ -18,6 +18,8 @@ type MessagesProps = {
   isReadonly: boolean;
   isArtifactVisible: boolean;
   selectedModelId: string;
+  onEditFailedResponse?: (errorMessageId: string) => void;
+  onRetryFailedResponse?: (errorMessageId: string) => void;
 };
 
 function PureMessages({
@@ -30,6 +32,8 @@ function PureMessages({
   regenerate,
   isReadonly,
   selectedModelId: _selectedModelId,
+  onEditFailedResponse,
+  onRetryFailedResponse,
 }: MessagesProps) {
   const {
     containerRef: messagesContainerRef,
@@ -62,6 +66,8 @@ function PureMessages({
               isReadonly={isReadonly}
               key={message.id}
               message={message}
+              onEditFailedResponse={onEditFailedResponse}
+              onRetryFailedResponse={onRetryFailedResponse}
               regenerate={regenerate}
               requiresScrollPadding={
                 hasSentMessage && index === messages.length - 1
