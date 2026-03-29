@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import { AnalyticsD3Chart } from "@/components/analytics-d3-chart";
+import { useSizeBreakpoints } from "@/hooks/use-size-breakpoints";
 
 type AnalyticsRow = {
   week: number;
@@ -94,6 +95,11 @@ const currencyTickFormatter = (value: number) => {
 };
 
 export function AnalyticsInsight() {
+  const { containerRef, ready, widthBucket } = useSizeBreakpoints({
+    widthBreakpoints: [640, 960, 1280],
+    heightBreakpoints: [260, 320, 420],
+  });
+
   const [activeMetric, setActiveMetric] = useState<MetricKey>("revenue");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -123,6 +129,7 @@ export function AnalyticsInsight() {
   );
 
   const activeSeries = metricConfig[activeMetric];
+  const xAxisInterval = widthBucket === 0 ? 8 : widthBucket === 1 ? 6 : 5;
 
   return (
     <div className="w-full space-y-4 rounded-2xl border bg-card p-4 md:p-5">
@@ -192,9 +199,10 @@ export function AnalyticsInsight() {
           ))}
         </div>
 
-        <div className="h-80 w-full">
-          <ResponsiveContainer height="100%" width="100%">
-            <AreaChart data={rows} margin={{ top: 8, right: 12, left: 8, bottom: 6 }}>
+        <div className="h-80 w-full min-w-0" ref={containerRef}>
+          {ready ? (
+            <ResponsiveContainer height="100%" minHeight={320} minWidth={0} width="100%">
+              <AreaChart data={rows} margin={{ top: 8, right: 12, left: 8, bottom: 6 }}>
               <defs>
                 <linearGradient id="revenueGradient" x1="0" x2="0" y1="0" y2="1">
                   <stop offset="0%" stopColor={activeSeries.color} stopOpacity={0.45} />
@@ -211,7 +219,7 @@ export function AnalyticsInsight() {
               <XAxis
                 axisLine={false}
                 dataKey="week"
-                interval={5}
+                interval={xAxisInterval}
                 tickLine={false}
                 tickMargin={10}
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
@@ -258,8 +266,13 @@ export function AnalyticsInsight() {
                 strokeWidth={2}
                 type="monotone"
               />
-            </AreaChart>
-          </ResponsiveContainer>
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-full items-center justify-center text-muted-foreground text-xs">
+              Preparing chart...
+            </div>
+          )}
         </div>
       </div>
 

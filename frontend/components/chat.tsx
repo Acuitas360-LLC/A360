@@ -81,6 +81,12 @@ export function Chat({
     questions: string[];
     index: number;
   }>({ active: false, questions: [], index: 0 });
+  const bulkDispatchInFlightRef = useRef(false);
+  const previousStatusRef = useRef("ready");
+  const bulkQueueRef = useRef<{ questions: string[]; index: number }>({
+    questions: [],
+    index: 0,
+  });
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
   const [failedPromptByErrorMessageId, setFailedPromptByErrorMessageId] =
     useState<Record<string, string>>({});
@@ -162,6 +168,39 @@ export function Chat({
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
+      const hasUsableAssistantResponseForCurrentTurn = (() => {
+        const lastUserIndex = [...messages]
+          .map((msg, idx) => ({ msg, idx }))
+          .reverse()
+          .find(({ msg }) => msg.role === "user")?.idx;
+
+        if (typeof lastUserIndex !== "number") {
+          return false;
+        }
+
+        return messages.slice(lastUserIndex + 1).some((msg) => {
+          if (msg.role !== "assistant") {
+            return false;
+          }
+
+          const hasNormalText = msg.parts?.some(
+            (part) =>
+              part.type === "text" &&
+              part.text.trim().length > 0 &&
+              !part.text.includes(ERROR_RESPONSE_MARKER)
+          );
+
+          const hasStructuredResult = msg.parts?.some(
+            (part) =>
+              part.type === "data-resultSummary" ||
+              part.type === "data-sqlResult" ||
+              part.type === "data-visualizationFigure"
+          );
+
+          return Boolean(hasNormalText || hasStructuredResult);
+        });
+      })();
+
       const lastUserMessage = [...messages]
         .reverse()
         .find((msg) => msg.role === "user");
@@ -197,7 +236,39 @@ export function Chat({
             )
         );
 
-        if (alreadyHasErrorMessage) {
+        // If we already produced a usable assistant response for the latest
+        // user prompt, avoid appending a second synthetic failure block.
+        const lastUserIndex = [...currentMessages]
+          .map((msg, idx) => ({ msg, idx }))
+          .reverse()
+          .find(({ msg }) => msg.role === "user")?.idx;
+
+        const hasUsableAssistantResponse =
+          typeof lastUserIndex === "number"
+            ? currentMessages.slice(lastUserIndex + 1).some((msg) => {
+                if (msg.role !== "assistant") {
+                  return false;
+                }
+
+                const hasNormalText = msg.parts?.some(
+                  (part) =>
+                    part.type === "text" &&
+                    part.text.trim().length > 0 &&
+                    !part.text.includes(ERROR_RESPONSE_MARKER)
+                );
+
+                const hasStructuredResult = msg.parts?.some(
+                  (part) =>
+                    part.type === "data-resultSummary" ||
+                    part.type === "data-sqlResult" ||
+                    part.type === "data-visualizationFigure"
+                );
+
+                return Boolean(hasNormalText || hasStructuredResult);
+              })
+            : false;
+
+        if (alreadyHasErrorMessage || hasUsableAssistantResponse) {
           return currentMessages;
         }
 
@@ -216,7 +287,9 @@ export function Chat({
         ];
       });
 
-      if (bulkQueue.active) {
+      if (bulkQueue.active && !hasUsableAssistantResponseForCurrentTurn) {
+        bulkDispatchInFlightRef.current = false;
+        bulkQueueRef.current = { questions: [], index: 0 };
         setBulkQueue({ active: false, questions: [], index: 0 });
       }
 
@@ -234,7 +307,7 @@ export function Chat({
         });
       }
 
-      if (bulkQueue.active) {
+      if (bulkQueue.active && !hasUsableAssistantResponseForCurrentTurn) {
         toast({
           type: "error",
           description: "Bulk run stopped due to an error. You can retry from Bulk Upload.",
@@ -242,6 +315,46 @@ export function Chat({
       }
     },
   });
+
+  useEffect(() => {
+    setFailedPromptByErrorMessageId((current) => {
+      let changed = false;
+      const next = { ...current };
+
+      for (let i = 0; i < messages.length; i += 1) {
+        const message = messages[i];
+        if (!message || message.role !== "assistant" || next[message.id]) {
+          continue;
+        }
+
+        const hasInlineErrorMarker = (message.parts || []).some(
+          (part) =>
+            part.type === "text" && part.text.includes(ERROR_RESPONSE_MARKER)
+        );
+        if (!hasInlineErrorMarker) {
+          continue;
+        }
+
+        const previousUser = [...messages.slice(0, i)]
+          .reverse()
+          .find((candidate) => candidate.role === "user");
+
+        const previousUserText =
+          previousUser?.parts
+            ?.filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join("\n")
+            .trim() || "";
+
+        if (previousUserText) {
+          next[message.id] = previousUserText;
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [messages]);
 
   const sendMessageWithDemo = useCallback<typeof sendMessage>(
     (...args) => {
@@ -327,6 +440,9 @@ export function Chat({
   );
 
   useEffect(() => {
+    const previousStatus = previousStatusRef.current;
+    previousStatusRef.current = status;
+
     if (!bulkQueue.active) {
       return;
     }
@@ -335,34 +451,45 @@ export function Chat({
       return;
     }
 
-    if (bulkQueue.index >= bulkQueue.questions.length) {
-      toast({
-        type: "success",
-        description: "Bulk run complete",
-      });
-      setBulkQueue({ active: false, questions: [], index: 0 });
+    if (previousStatus !== "ready") {
+      bulkDispatchInFlightRef.current = false;
+    }
+
+    if (bulkDispatchInFlightRef.current) {
       return;
     }
 
-    const currentQuestion = bulkQueue.questions[bulkQueue.index];
-    if (!currentQuestion?.trim()) {
+    const queue = bulkQueueRef.current;
+
+    while (queue.index < queue.questions.length) {
+      const currentQuestion = queue.questions[queue.index]?.trim();
+      queue.index += 1;
+
       setBulkQueue((current) => ({
         ...current,
-        index: current.index + 1,
+        index: queue.index,
       }));
+
+      if (!currentQuestion) {
+        continue;
+      }
+
+      bulkDispatchInFlightRef.current = true;
+      sendMessageWithDemo({
+        role: "user",
+        parts: [{ type: "text", text: currentQuestion }],
+      });
       return;
     }
 
-    sendMessageWithDemo({
-      role: "user",
-      parts: [{ type: "text", text: currentQuestion }],
+    toast({
+      type: "success",
+      description: "Bulk run complete",
     });
-
-    setBulkQueue((current) => ({
-      ...current,
-      index: current.index + 1,
-    }));
-  }, [bulkQueue, sendMessageWithDemo, status]);
+    bulkDispatchInFlightRef.current = false;
+    bulkQueueRef.current = { questions: [], index: 0 };
+    setBulkQueue({ active: false, questions: [], index: 0 });
+  }, [bulkQueue.active, sendMessageWithDemo, status]);
 
   const handleBulkUploadStart = useCallback((questions: string[]) => {
     const normalizedQuestions = questions
@@ -382,6 +509,13 @@ export function Chat({
       questions: normalizedQuestions,
       index: 0,
     });
+
+    bulkQueueRef.current = {
+      questions: normalizedQuestions,
+      index: 0,
+    };
+
+    bulkDispatchInFlightRef.current = false;
 
     toast({
       type: "success",
@@ -442,6 +576,7 @@ export function Chat({
           onRetryFailedResponse={handleRetryFailedResponse}
           regenerate={regenerate}
           selectedModelId={initialChatModel}
+          selectedVisibilityType={visibilityType}
           setMessages={setMessages}
           status={effectiveStatus}
           votes={votes}

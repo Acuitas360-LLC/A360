@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useSizeBreakpoints } from "@/hooks/use-size-breakpoints";
 
 type QueryResultChartProps = {
   columns: string[];
@@ -45,6 +46,11 @@ function toNumber(value: unknown): number {
 const CHART_COLORS = ["#2a9d8f", "#e76f51", "#457b9d", "#f4a261"];
 
 export function QueryResultChart({ columns, rows }: QueryResultChartProps) {
+  const { containerRef, ready, widthBucket } = useSizeBreakpoints({
+    widthBreakpoints: [560, 840, 1120],
+    heightBreakpoints: [220, 280, 360],
+  });
+
   if (!columns.length || !rows.length) {
     return null;
   }
@@ -84,43 +90,52 @@ export function QueryResultChart({ columns, rows }: QueryResultChartProps) {
     return dataPoint;
   });
 
+  const labelAngle = widthBucket <= 1 ? -50 : -35;
+  const labelInterval = widthBucket === 0 ? 1 : 0;
+
   return (
     <div className="rounded-md border p-3">
       <p className="mb-2 text-muted-foreground text-xs">Chart Preview</p>
-      <div className="h-72 w-full">
-        <ResponsiveContainer height="100%" width="100%">
-          <BarChart data={chartRows} margin={{ top: 8, right: 8, bottom: 48, left: 4 }}>
-            <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-            <XAxis
-              angle={-35}
-              axisLine={false}
-              dataKey="label"
-              height={56}
-              interval={0}
-              minTickGap={0}
-              textAnchor="end"
-              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
-              tickLine={false}
-              tickMargin={8}
-            />
-            <YAxis
-              axisLine={false}
-              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
-              tickLine={false}
-              tickMargin={8}
-            />
-            <Tooltip />
-            <Legend />
-            {metricColumns.map((metricColumn, index) => (
-              <Bar
-                dataKey={metricColumn}
-                fill={CHART_COLORS[index % CHART_COLORS.length]}
-                key={metricColumn}
-                radius={[4, 4, 0, 0]}
+      <div className="h-72 w-full min-w-0" ref={containerRef}>
+        {ready ? (
+          <ResponsiveContainer height="100%" minHeight={280} minWidth={0} width="100%">
+            <BarChart data={chartRows} margin={{ top: 8, right: 8, bottom: 48, left: 4 }}>
+              <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                angle={labelAngle}
+                axisLine={false}
+                dataKey="label"
+                height={56}
+                interval={labelInterval}
+                minTickGap={0}
+                textAnchor="end"
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                tickLine={false}
+                tickMargin={8}
               />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
+              <YAxis
+                axisLine={false}
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                tickLine={false}
+                tickMargin={8}
+              />
+              <Tooltip />
+              <Legend />
+              {metricColumns.map((metricColumn, index) => (
+                <Bar
+                  dataKey={metricColumn}
+                  fill={CHART_COLORS[index % CHART_COLORS.length]}
+                  key={metricColumn}
+                  radius={[4, 4, 0, 0]}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex h-full items-center justify-center text-muted-foreground text-xs">
+            Preparing chart...
+          </div>
+        )}
       </div>
     </div>
   );

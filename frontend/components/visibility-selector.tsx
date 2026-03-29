@@ -27,14 +27,14 @@ const visibilities: Array<{
 }> = [
   {
     id: "private",
-    label: "Private",
-    description: "Only you can access this chat",
+    label: "Marketing Head",
+    description: "Business view (SQL query hidden)",
     icon: <LockIcon />,
   },
   {
     id: "public",
-    label: "Public",
-    description: "Anyone with the link can access this chat",
+    label: "Analyst",
+    description: "Full technical view (show all)",
     icon: <GlobeIcon />,
   },
 ];

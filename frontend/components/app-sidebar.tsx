@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { PlusIcon, TrashIcon } from "@/components/icons";
 import {
   getChatHistoryPaginationKey,
+  type ChatHistory,
   SidebarHistory,
 } from "@/components/sidebar-history";
 import type { User } from "@/lib/db/schema";
@@ -35,11 +36,22 @@ import {
 } from "./ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
-export function AppSidebar({ user }: { user: User | undefined }) {
+export function AppSidebar({
+  user,
+  initialHistory,
+}: {
+  user: User | undefined;
+  initialHistory?: ChatHistory;
+}) {
   const router = useRouter();
   const { setOpenMobile } = useSidebar();
   const { mutate } = useSWRConfig();
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
+
+  useEffect(() => {
+    // Warm the dynamic chat route bundle to reduce first navigation latency.
+    router.prefetch(`/chat/${generateThreadId()}`);
+  }, [router]);
 
   const handleDeleteAll = () => {
     const deletePromise = fetch("/api/history", {
@@ -105,7 +117,6 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                       onClick={() => {
                         setOpenMobile(false);
                         router.push(`/chat/${generateThreadId()}`);
-                        router.refresh();
                       }}
                       type="button"
                       variant="ghost"
@@ -122,7 +133,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
-          <SidebarHistory user={user} />
+          <SidebarHistory initialHistory={initialHistory} user={user} />
         </SidebarContent>
         <SidebarFooter>{user && <SidebarUserNav user={user} />}</SidebarFooter>
       </Sidebar>

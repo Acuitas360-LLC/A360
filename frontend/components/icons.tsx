@@ -265,6 +265,35 @@ export const RouteIcon = ({ size = 16 }: { size?: number }) => {
   );
 };
 
+export const PulseIcon = ({ size = 16 }: { size?: number }) => {
+  return (
+    <svg
+      height={size}
+      strokeLinejoin="round"
+      style={{ color: "currentcolor" }}
+      viewBox="0 0 16 16"
+      width={size}
+    >
+      <path
+        d="M1 8H3.3L5 4.8L7.4 11.2L9.2 6.8L10.4 8H15"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M2.5 3.5C2.5 2.67 3.17 2 4 2H12C12.83 2 13.5 2.67 13.5 3.5V12.5C13.5 13.33 12.83 14 12 14H4C3.17 14 2.5 13.33 2.5 12.5V3.5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.2"
+      />
+    </svg>
+  );
+};
+
 export const FileIcon = ({ size = 16 }: { size?: number }) => {
   return (
     <svg

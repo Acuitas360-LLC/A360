@@ -3,16 +3,27 @@
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChartErrorBoundary } from "@/components/chart-error-boundary";
 import { PlotlyFigureChart } from "@/components/plotly-figure-chart";
 import { QueryResultChart } from "@/components/query-result-chart";
+import { SpecChartRenderer } from "@/components/spec-chart-renderer";
+import type { VisibilityType } from "./visibility-selector";
 
 type SQLTransparencyPanelProps = {
   sqlQuery?: string;
   resultSummary?: string;
+  showResultSummary?: boolean;
   columns?: string[];
   queryRows?: Array<Record<string, unknown>>;
   rowCount?: number;
+  progressStages?: Array<{
+    key?: string;
+    label?: string;
+    state?: string;
+  }>;
+  selectedVisibilityType: VisibilityType;
   visualizationCode?: string;
+  visualizationSpec?: string;
   visualizationFigure?: {
     data?: unknown[];
     layout?: Record<string, unknown>;
@@ -34,15 +45,20 @@ type SQLTransparencyPanelProps = {
 export function SQLTransparencyPanel({
   sqlQuery,
   resultSummary,
+  showResultSummary = true,
   columns,
   queryRows,
   rowCount,
+  progressStages,
+  selectedVisibilityType,
   visualizationCode,
+  visualizationSpec,
   visualizationFigure,
   visualizationMeta,
   relevantQuestions,
 }: SQLTransparencyPanelProps) {
   const [showAllRows, setShowAllRows] = useState(false);
+  const isMarketingHead = selectedVisibilityType === "private";
 
   const visibleRows = useMemo(() => {
     if (!queryRows?.length) {
@@ -55,6 +71,36 @@ export function SQLTransparencyPanel({
 
     return queryRows.slice(0, 20);
   }, [queryRows, showAllRows]);
+
+  const normalizedProgressStages = useMemo(() => {
+    if (!progressStages?.length) {
+      return [] as Array<{ key: string; label: string; state: string }>;
+    }
+
+    const orderedKeys: string[] = [];
+    const stageMap = new Map<string, { key: string; label: string; state: string }>();
+
+    for (const stage of progressStages) {
+      const key = String(stage.key || stage.label || "working").trim();
+      if (!key) {
+        continue;
+      }
+
+      if (!stageMap.has(key)) {
+        orderedKeys.push(key);
+      }
+
+      stageMap.set(key, {
+        key,
+        label: String(stage.label || key),
+        state: String(stage.state || "active"),
+      });
+    }
+
+    return orderedKeys
+      .map((key) => stageMap.get(key))
+      .filter((stage): stage is { key: string; label: string; state: string } => Boolean(stage));
+  }, [progressStages]);
 
   const downloadCsv = () => {
     if (!columns?.length || !queryRows?.length) {
@@ -89,12 +135,14 @@ export function SQLTransparencyPanel({
   };
 
   const hasContent =
+    Boolean(normalizedProgressStages.length) ||
     Boolean(sqlQuery) ||
     Boolean(resultSummary) ||
     Boolean(columns?.length) ||
     Boolean(queryRows?.length) ||
     typeof rowCount === "number" ||
     Boolean(visualizationCode) ||
+    Boolean(visualizationSpec) ||
     Boolean(visualizationFigure?.data?.length) ||
     Boolean(relevantQuestions?.length);
 
@@ -109,14 +157,40 @@ export function SQLTransparencyPanel({
         <Badge variant="outline">Parity View</Badge>
       </div>
 
-      {resultSummary && (
+      {!!normalizedProgressStages.length && (
+        <div className="mb-3 rounded-md border bg-muted/20 p-2">
+          <p className="mb-1 text-muted-foreground text-xs">Live Progress</p>
+          <div className="flex flex-wrap gap-2">
+            {normalizedProgressStages.map((stage) => {
+              const isCompleted = stage.state === "completed";
+              const isFailed = stage.state === "failed";
+              const stateClass = isFailed
+                ? "border-red-300 bg-red-50 text-red-700"
+                : isCompleted
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                  : "border-blue-300 bg-blue-50 text-blue-700";
+
+              return (
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-xs ${stateClass}`}
+                  key={`progress-stage-${stage.key}`}
+                >
+                  {stage.label}{isCompleted ? " - done" : isFailed ? " - failed" : "..."}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {showResultSummary && resultSummary && (
         <div className="mb-3">
           <p className="mb-1 text-muted-foreground text-xs">Result Summary</p>
           <p className="text-sm">{resultSummary}</p>
         </div>
       )}
 
-      {sqlQuery && (
+      {sqlQuery && !isMarketingHead && (
         <div className="mb-3">
           <p className="mb-1 text-muted-foreground text-xs">SQL Query Executed</p>
           <pre className="overflow-x-auto rounded-md border bg-muted p-2 text-xs">
@@ -198,11 +272,15 @@ export function SQLTransparencyPanel({
           <p className="mb-2 text-muted-foreground text-xs">
             Deterministic Chart 1 (Original Plotly)
           </p>
-          <PlotlyFigureChart figure={visualizationFigure} mode="original" />
+          <ChartErrorBoundary>
+            <PlotlyFigureChart figure={visualizationFigure} mode="original" />
+          </ChartErrorBoundary>
           <p className="mb-2 mt-3 text-muted-foreground text-xs">
             Deterministic Chart 2 (Normalized Theme)
           </p>
-          <PlotlyFigureChart figure={visualizationFigure} mode="normalized" />
+          <ChartErrorBoundary>
+            <PlotlyFigureChart figure={visualizationFigure} mode="normalized" />
+          </ChartErrorBoundary>
           {visualizationMeta && (
             <div className="mt-2 rounded-md border bg-muted/30 p-2 text-xs">
               <p className="font-medium">Data Fidelity</p>
@@ -230,15 +308,37 @@ export function SQLTransparencyPanel({
           <p className="mb-2 text-muted-foreground text-xs">
             Heuristic Chart 3 (table-based fallback)
           </p>
-          <QueryResultChart columns={columns} rows={queryRows} />
+          <ChartErrorBoundary>
+            <QueryResultChart columns={columns} rows={queryRows} />
+          </ChartErrorBoundary>
         </div>
       )}
 
-      {visualizationCode && (
+      {!!queryRows?.length && !!visualizationSpec && (
+        <div className="mb-3">
+          <p className="mb-2 text-muted-foreground text-xs">
+            Spec Chart 4 (new visualization-spec node)
+          </p>
+          <ChartErrorBoundary>
+            <SpecChartRenderer rows={queryRows} visualizationSpec={visualizationSpec} />
+          </ChartErrorBoundary>
+        </div>
+      )}
+
+      {visualizationCode && !isMarketingHead && (
         <div className="mb-3">
           <p className="mb-1 text-muted-foreground text-xs">Visualization Payload</p>
           <pre className="overflow-x-auto rounded-md border bg-muted p-2 text-xs">
             <code>{visualizationCode}</code>
+          </pre>
+        </div>
+      )}
+
+      {visualizationSpec && !isMarketingHead && (
+        <div className="mb-3">
+          <p className="mb-1 text-muted-foreground text-xs">Visualization Spec Payload (New Node)</p>
+          <pre className="overflow-x-auto rounded-md border bg-muted p-2 text-xs">
+            <code>{visualizationSpec}</code>
           </pre>
         </div>
       )}

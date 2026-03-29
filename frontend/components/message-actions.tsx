@@ -8,6 +8,8 @@ import type { ChatMessage } from "@/lib/types";
 import { Action, Actions } from "./elements/actions";
 import { CopyIcon, PencilEditIcon, ThumbDownIcon, ThumbUpIcon } from "./icons";
 
+const ERROR_RESPONSE_MARKER = "[[ERROR_RESPONSE]]";
+
 export function PureMessageActions({
   chatId,
   message,
@@ -34,6 +36,17 @@ export function PureMessageActions({
     .map((part) => part.text)
     .join("\n")
     .trim();
+
+  const isInlineErrorMessage =
+    message.role === "assistant" &&
+    message.parts?.some(
+      (part) =>
+        part.type === "text" && part.text.includes(ERROR_RESPONSE_MARKER)
+    );
+
+  if (isInlineErrorMessage) {
+    return null;
+  }
 
   const handleCopy = async () => {
     if (!textFromParts) {

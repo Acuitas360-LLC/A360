@@ -24,6 +24,7 @@ import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
 import { SQLTransparencyPanel } from "./sql-transparency-panel";
 import { Button } from "./ui/button";
+import type { VisibilityType } from "./visibility-selector";
 import { Weather } from "./weather";
 
 const ANALYTICS_RESPONSE_MARKER = "[[ANALYTICS_52_WEEKS_RESPONSE]]";
@@ -39,6 +40,7 @@ const PurePreviewMessage = ({
   regenerate,
   isReadonly,
   requiresScrollPadding: _requiresScrollPadding,
+  selectedVisibilityType,
   onEditFailedResponse,
   onRetryFailedResponse,
 }: {
@@ -51,6 +53,7 @@ const PurePreviewMessage = ({
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   isReadonly: boolean;
   requiresScrollPadding: boolean;
+  selectedVisibilityType: VisibilityType;
   onEditFailedResponse?: (errorMessageId: string) => void;
   onRetryFailedResponse?: (errorMessageId: string) => void;
 }) => {
@@ -80,12 +83,37 @@ const PurePreviewMessage = ({
   const sqlRowCount = message.parts.find(
     (part) => part.type === "data-sqlRowCount"
   ) as { type: "data-sqlRowCount"; data: number } | undefined;
-  const visualizationCode = message.parts.find(
-    (part) => part.type === "data-visualizationCode"
-  ) as { type: "data-visualizationCode"; data: string } | undefined;
-  const visualizationFigure = message.parts.find(
-    (part) => part.type === "data-visualizationFigure"
-  ) as
+  const latestSqlColumns = [...message.parts]
+    .reverse()
+    .find((part) => part.type === "data-sqlColumns") as
+    | { type: "data-sqlColumns"; data: string[] }
+    | undefined;
+  const latestSqlResult = [...message.parts]
+    .reverse()
+    .find((part) => part.type === "data-sqlResult") as
+    | {
+        type: "data-sqlResult";
+        data: { columns?: string[]; data?: Array<Record<string, unknown>> };
+      }
+    | undefined;
+  const latestSqlRowCount = [...message.parts]
+    .reverse()
+    .find((part) => part.type === "data-sqlRowCount") as
+    | { type: "data-sqlRowCount"; data: number }
+    | undefined;
+  const visualizationCode = [...message.parts]
+    .reverse()
+    .find((part) => part.type === "data-visualizationCode") as
+    | { type: "data-visualizationCode"; data: string }
+    | undefined;
+  const visualizationSpec = [...message.parts]
+    .reverse()
+    .find((part) => part.type === "data-visualizationSpec") as
+    | { type: "data-visualizationSpec"; data: string }
+    | undefined;
+  const visualizationFigure = [...message.parts]
+    .reverse()
+    .find((part) => part.type === "data-visualizationFigure") as
     | {
         type: "data-visualizationFigure";
         data: {
@@ -96,9 +124,9 @@ const PurePreviewMessage = ({
         };
       }
     | undefined;
-  const visualizationMeta = message.parts.find(
-    (part) => part.type === "data-visualizationMeta"
-  ) as
+  const visualizationMeta = [...message.parts]
+    .reverse()
+    .find((part) => part.type === "data-visualizationMeta") as
     | {
         type: "data-visualizationMeta";
         data: {
@@ -112,9 +140,28 @@ const PurePreviewMessage = ({
         };
       }
     | undefined;
-  const relevantQuestions = message.parts.find(
+  const relevantQuestionsParts = message.parts.filter(
     (part) => part.type === "data-relevantQuestions"
-  ) as { type: "data-relevantQuestions"; data: string[] } | undefined;
+  ) as Array<{ type: "data-relevantQuestions"; data: string[] }>;
+
+  const relevantQuestions = [...relevantQuestionsParts]
+    .reverse()
+    .find((part) => Array.isArray(part.data) && part.data.length > 0);
+
+  const hasInlineErrorText = message.parts.some(
+    (part) =>
+      part.type === "text" &&
+      message.role === "assistant" &&
+      part.text.includes(ERROR_RESPONSE_MARKER)
+  );
+  const hasAssistantNarrativeText = message.parts.some(
+    (part) =>
+      part.type === "text" &&
+      message.role === "assistant" &&
+      part.text.trim().length > 0 &&
+      !part.text.includes(ERROR_RESPONSE_MARKER) &&
+      !part.text.includes(ANALYTICS_RESPONSE_MARKER)
+  );
 
   useDataStream();
 
@@ -168,20 +215,6 @@ const PurePreviewMessage = ({
                 />
               ))}
             </div>
-          )}
-
-          {message.role === "assistant" && (
-            <SQLTransparencyPanel
-              columns={sqlColumns?.data || sqlResult?.data?.columns}
-              queryRows={sqlResult?.data?.data}
-              relevantQuestions={relevantQuestions?.data}
-              resultSummary={resultSummary?.data}
-              rowCount={sqlRowCount?.data}
-              sqlQuery={sqlQuery?.data}
-              visualizationCode={visualizationCode?.data}
-              visualizationFigure={visualizationFigure?.data}
-              visualizationMeta={visualizationMeta?.data}
-            />
           )}
 
           {message.parts?.map((part, index) => {
@@ -474,6 +507,26 @@ const PurePreviewMessage = ({
 
             return null;
           })}
+
+          {message.role === "assistant" &&
+            !isLoading &&
+            !hasInlineErrorText &&
+            hasAssistantNarrativeText && (
+            <SQLTransparencyPanel
+              columns={latestSqlColumns?.data || latestSqlResult?.data?.columns}
+              queryRows={latestSqlResult?.data?.data}
+              relevantQuestions={relevantQuestions?.data}
+              resultSummary={resultSummary?.data}
+              showResultSummary={false}
+              rowCount={latestSqlRowCount?.data}
+              selectedVisibilityType={selectedVisibilityType}
+              sqlQuery={sqlQuery?.data}
+              visualizationCode={visualizationCode?.data}
+              visualizationSpec={visualizationSpec?.data}
+              visualizationFigure={visualizationFigure?.data}
+              visualizationMeta={visualizationMeta?.data}
+            />
+          )}
 
           {!isReadonly && (
             <MessageActions

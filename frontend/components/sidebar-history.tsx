@@ -124,7 +124,13 @@ export function getChatHistoryPaginationKey(
   return `/api/history?${params.toString()}`;
 }
 
-export function SidebarHistory({ user }: { user: User | undefined }) {
+export function SidebarHistory({
+  user,
+  initialHistory,
+}: {
+  user: User | undefined;
+  initialHistory?: ChatHistory;
+}) {
   const { setOpenMobile } = useSidebar();
   const pathname = usePathname();
   const id = pathname?.startsWith("/chat/") ? pathname.split("/")[2] : null;
@@ -142,7 +148,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
       getChatHistoryPaginationKey(pageIndex, previousPageData, searchQuery),
     fetcher,
     {
-      fallbackData: [],
+      fallbackData: initialHistory ? [initialHistory] : [],
       keepPreviousData: true,
     }
   );

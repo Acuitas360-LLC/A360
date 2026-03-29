@@ -25,6 +25,7 @@ export type CustomUIDataTypes = {
     data?: Array<Record<string, unknown>>;
   };
   visualizationCode: string;
+  visualizationSpec: string;
   visualizationFigure: {
     data?: unknown[];
     layout?: Record<string, unknown>;

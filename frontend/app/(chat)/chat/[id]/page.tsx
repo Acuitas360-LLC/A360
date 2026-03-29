@@ -39,9 +39,10 @@ export default function Page(props: { params: Promise<{ id: string }> }) {
 
 async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const initialMessages = await getInitialMessages(id);
-
-  const cookieStore = await cookies();
+  const [initialMessages, cookieStore] = await Promise.all([
+    getInitialMessages(id),
+    cookies(),
+  ]);
   const chatModelFromCookie = cookieStore.get("chat-model");
 
   if (!chatModelFromCookie) {

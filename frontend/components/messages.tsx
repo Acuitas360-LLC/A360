@@ -6,6 +6,7 @@ import type { ChatMessage } from "@/lib/types";
 import { useDataStream } from "./data-stream-provider";
 import { Greeting } from "./greeting";
 import { PreviewMessage, ThinkingMessage } from "./message";
+import type { VisibilityType } from "./visibility-selector";
 
 type MessagesProps = {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
@@ -18,6 +19,7 @@ type MessagesProps = {
   isReadonly: boolean;
   isArtifactVisible: boolean;
   selectedModelId: string;
+  selectedVisibilityType: VisibilityType;
   onEditFailedResponse?: (errorMessageId: string) => void;
   onRetryFailedResponse?: (errorMessageId: string) => void;
 };
@@ -32,6 +34,7 @@ function PureMessages({
   regenerate,
   isReadonly,
   selectedModelId: _selectedModelId,
+  selectedVisibilityType,
   onEditFailedResponse,
   onRetryFailedResponse,
 }: MessagesProps) {
@@ -46,6 +49,32 @@ function PureMessages({
   });
 
   useDataStream();
+
+  const latestUserIndex = [...messages]
+    .map((message, index) => ({ message, index }))
+    .reverse()
+    .find(({ message }) => message.role === "user")?.index;
+
+  const hasVisibleAssistantMessageForCurrentTurn =
+    typeof latestUserIndex === "number"
+      ? messages.slice(latestUserIndex + 1).some((message) => {
+          if (message.role !== "assistant") {
+            return false;
+          }
+
+          return message.parts.some(
+            (part) => part.type === "text" && Boolean(part.text?.trim())
+          );
+        })
+      : messages.some((message) => {
+          if (message.role !== "assistant") {
+            return false;
+          }
+
+          return message.parts.some(
+            (part) => part.type === "text" && Boolean(part.text?.trim())
+          );
+        });
 
   return (
     <div className="relative flex-1 bg-background">
@@ -72,6 +101,7 @@ function PureMessages({
               requiresScrollPadding={
                 hasSentMessage && index === messages.length - 1
               }
+              selectedVisibilityType={selectedVisibilityType}
               setMessages={setMessages}
               vote={
                 votes
@@ -81,7 +111,8 @@ function PureMessages({
             />
           ))}
 
-          {status === "submitted" &&
+          {(status === "submitted" ||
+            (status === "streaming" && !hasVisibleAssistantMessageForCurrentTurn)) &&
             !messages.some((msg) =>
               msg.parts?.some(
                 (part) => "state" in part && part.state === "approval-responded"
