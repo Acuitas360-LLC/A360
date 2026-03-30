@@ -7,6 +7,7 @@ import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import type { UIArtifact } from "./artifact";
 import { PreviewMessage, ThinkingMessage } from "./message";
+import type { VisibilityType } from "./visibility-selector";
 
 type ArtifactMessagesProps = {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
@@ -18,6 +19,7 @@ type ArtifactMessagesProps = {
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   isReadonly: boolean;
   artifactStatus: UIArtifact["status"];
+  selectedVisibilityType: VisibilityType;
 };
 
 function PureArtifactMessages({
@@ -29,6 +31,7 @@ function PureArtifactMessages({
   setMessages,
   regenerate,
   isReadonly,
+  selectedVisibilityType,
 }: ArtifactMessagesProps) {
   const {
     containerRef: messagesContainerRef,
@@ -53,10 +56,20 @@ function PureArtifactMessages({
           isReadonly={isReadonly}
           key={message.id}
           message={message}
+          previousUserQuery={
+            [...messages.slice(0, index)]
+              .reverse()
+              .find((candidate) => candidate.role === "user")
+              ?.parts?.filter((part) => part.type === "text")
+              .map((part) => part.text)
+              .join("\n")
+              .trim() || ""
+          }
           regenerate={regenerate}
           requiresScrollPadding={
             hasSentMessage && index === messages.length - 1
           }
+          selectedVisibilityType={selectedVisibilityType}
           setMessages={setMessages}
           vote={
             votes

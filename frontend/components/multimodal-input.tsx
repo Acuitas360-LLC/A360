@@ -463,7 +463,7 @@ function PureMultimodalInput({
           </PromptInputTools>
 
           {status === "submitted" || status === "streaming" ? (
-            <StopButton setMessages={setMessages} stop={stop} />
+            <StopButton stop={stop} />
           ) : (
             <PromptInputSubmit
               className="size-8 rounded-full bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
@@ -535,10 +535,8 @@ const AttachmentsButton = memo(PureAttachmentsButton);
 
 function PureStopButton({
   stop,
-  setMessages,
 }: {
   stop: () => void;
-  setMessages: UseChatHelpers<ChatMessage>["setMessages"];
 }) {
   return (
     <Button
@@ -547,7 +545,6 @@ function PureStopButton({
       onClick={(event) => {
         event.preventDefault();
         stop();
-        setMessages((messages) => messages);
       }}
     >
       <StopIcon size={14} />

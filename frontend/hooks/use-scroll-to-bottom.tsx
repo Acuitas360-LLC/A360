@@ -6,6 +6,7 @@ export function useScrollToBottom() {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const isAtBottomRef = useRef(true);
   const isUserScrollingRef = useRef(false);
+  const pendingAutoScrollRef = useRef(false);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -46,8 +47,10 @@ export function useScrollToBottom() {
 
       // Update isAtBottom state
       const atBottom = checkIfAtBottom();
-      setIsAtBottom(atBottom);
-      isAtBottomRef.current = atBottom;
+      if (isAtBottomRef.current !== atBottom) {
+        setIsAtBottom(atBottom);
+        isAtBottomRef.current = atBottom;
+      }
 
       // Reset user scrolling flag after scroll ends
       scrollTimeout = setTimeout(() => {
@@ -70,15 +73,24 @@ export function useScrollToBottom() {
     }
 
     const scrollIfNeeded = () => {
+      if (pendingAutoScrollRef.current) {
+        return;
+      }
+
       // Only auto-scroll if user was at bottom and isn't actively scrolling
       if (isAtBottomRef.current && !isUserScrollingRef.current) {
+        pendingAutoScrollRef.current = true;
         requestAnimationFrame(() => {
           container.scrollTo({
             top: container.scrollHeight,
             behavior: "instant",
           });
-          setIsAtBottom(true);
+
+          // Keep this observer path side-effect only. Updating React state here can
+          // create render-feedback loops during high-frequency stream updates.
           isAtBottomRef.current = true;
+
+          pendingAutoScrollRef.current = false;
         });
       }
     };
@@ -95,11 +107,6 @@ export function useScrollToBottom() {
     const resizeObserver = new ResizeObserver(scrollIfNeeded);
     resizeObserver.observe(container);
 
-    // Also observe children for size changes
-    for (const child of container.children) {
-      resizeObserver.observe(child);
-    }
-
     return () => {
       mutationObserver.disconnect();
       resizeObserver.disconnect();
@@ -107,13 +114,17 @@ export function useScrollToBottom() {
   }, []);
 
   function onViewportEnter() {
-    setIsAtBottom(true);
-    isAtBottomRef.current = true;
+    if (!isAtBottomRef.current) {
+      setIsAtBottom(true);
+      isAtBottomRef.current = true;
+    }
   }
 
   function onViewportLeave() {
-    setIsAtBottom(false);
-    isAtBottomRef.current = false;
+    if (isAtBottomRef.current) {
+      setIsAtBottom(false);
+      isAtBottomRef.current = false;
+    }
   }
 
   return {

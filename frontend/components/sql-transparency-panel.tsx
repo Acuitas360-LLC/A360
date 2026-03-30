@@ -58,6 +58,7 @@ export function SQLTransparencyPanel({
   relevantQuestions,
 }: SQLTransparencyPanelProps) {
   const [showAllRows, setShowAllRows] = useState(false);
+  const [showDeterministicCharts, setShowDeterministicCharts] = useState(false);
   const isMarketingHead = selectedVisibilityType === "private";
 
   const visibleRows = useMemo(() => {
@@ -270,17 +271,26 @@ export function SQLTransparencyPanel({
       {!!visualizationFigure?.data?.length && (
         <div className="mb-3">
           <p className="mb-2 text-muted-foreground text-xs">
-            Deterministic Chart 1 (Original Plotly)
+            Deterministic Plotly Charts
           </p>
-          <ChartErrorBoundary>
-            <PlotlyFigureChart figure={visualizationFigure} mode="original" />
-          </ChartErrorBoundary>
-          <p className="mb-2 mt-3 text-muted-foreground text-xs">
-            Deterministic Chart 2 (Normalized Theme)
-          </p>
-          <ChartErrorBoundary>
-            <PlotlyFigureChart figure={visualizationFigure} mode="normalized" />
-          </ChartErrorBoundary>
+          {!showDeterministicCharts ? (
+            <div className="rounded-md border border-amber-300/60 bg-amber-50/40 p-2 text-xs text-amber-900">
+              Plotly charts are paused by default for stability in long streamed replies.
+              <Button
+                className="ml-2 h-7"
+                onClick={() => setShowDeterministicCharts(true)}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Load Plotly chart
+              </Button>
+            </div>
+          ) : (
+            <ChartErrorBoundary>
+              <PlotlyFigureChart figure={visualizationFigure} mode="normalized" />
+            </ChartErrorBoundary>
+          )}
           {visualizationMeta && (
             <div className="mt-2 rounded-md border bg-muted/30 p-2 text-xs">
               <p className="font-medium">Data Fidelity</p>

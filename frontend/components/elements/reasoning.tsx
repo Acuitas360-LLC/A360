@@ -3,7 +3,7 @@
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import type { ComponentProps } from "react";
-import { createContext, memo, useContext, useEffect, useState } from "react";
+import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -63,6 +63,11 @@ export const Reasoning = memo(
 
     const [hasAutoClosedRef, setHasAutoClosedRef] = useState(false);
     const [startTime, setStartTime] = useState<number | null>(null);
+    const setDurationRef = useRef(setDuration);
+
+    useEffect(() => {
+      setDurationRef.current = setDuration;
+    }, [setDuration]);
 
     // Track duration when streaming starts and ends
     useEffect(() => {
@@ -71,10 +76,10 @@ export const Reasoning = memo(
           setStartTime(Date.now());
         }
       } else if (startTime !== null) {
-        setDuration(Math.round((Date.now() - startTime) / MS_IN_S));
+        setDurationRef.current(Math.round((Date.now() - startTime) / MS_IN_S));
         setStartTime(null);
       }
-    }, [isStreaming, startTime, setDuration]);
+    }, [isStreaming, startTime]);
 
     // Auto-open when streaming starts, auto-close when streaming ends (once only)
     useEffect(() => {
@@ -90,7 +95,9 @@ export const Reasoning = memo(
     }, [isStreaming, isOpen, defaultOpen, setIsOpen, hasAutoClosedRef]);
 
     const handleOpenChange = (newOpen: boolean) => {
-      setIsOpen(newOpen);
+      if (newOpen !== isOpen) {
+        setIsOpen(newOpen);
+      }
     };
 
     return (

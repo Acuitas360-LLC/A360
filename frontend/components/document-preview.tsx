@@ -46,17 +46,28 @@ export function DocumentPreview({
     const boundingBox = hitboxRef.current?.getBoundingClientRect();
 
     if (artifact.documentId && boundingBox) {
-      setArtifact((currentArtifact) => ({
-        ...currentArtifact,
-        boundingBox: {
-          left: boundingBox.x,
-          top: boundingBox.y,
-          width: boundingBox.width,
-          height: boundingBox.height,
-        },
-      }));
+      setArtifact((currentArtifact) => {
+        if (
+          currentArtifact.boundingBox.left === boundingBox.x &&
+          currentArtifact.boundingBox.top === boundingBox.y &&
+          currentArtifact.boundingBox.width === boundingBox.width &&
+          currentArtifact.boundingBox.height === boundingBox.height
+        ) {
+          return currentArtifact;
+        }
+
+        return {
+          ...currentArtifact,
+          boundingBox: {
+            left: boundingBox.x,
+            top: boundingBox.y,
+            width: boundingBox.width,
+            height: boundingBox.height,
+          },
+        };
+      });
     }
-  }, [artifact.documentId, setArtifact]);
+  }, [artifact.documentId]);
 
   if (artifact.isVisible) {
     if (result) {
@@ -148,7 +159,7 @@ const PureHitboxLayer = ({
   result,
   setArtifact,
 }: {
-  hitboxRef: React.RefObject<HTMLDivElement>;
+  hitboxRef: React.RefObject<HTMLDivElement | null>;
   result: any;
   setArtifact: (
     updaterFn: UIArtifact | ((currentArtifact: UIArtifact) => UIArtifact)

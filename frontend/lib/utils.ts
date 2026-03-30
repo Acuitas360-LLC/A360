@@ -96,10 +96,17 @@ export function getLocalStorage(key: string) {
 }
 
 export function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
+  const randomUUID = globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
+  if (randomUUID) {
+    return randomUUID();
+  }
+
+  // Fallback for environments without crypto.randomUUID.
+  return '00000000-0000-4000-8000-000000000000'.replace(/[08]/g, (char) => {
+    const randomBuffer = new Uint8Array(1);
+    globalThis.crypto?.getRandomValues?.(randomBuffer);
+    const random = randomBuffer[0] ?? 0;
+    return (Number(char) ^ (random & 15) >> (Number(char) / 4)).toString(16);
   });
 }
 

@@ -8,6 +8,7 @@ import {
   type SetStateAction,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import useSWR, { useSWRConfig } from "swr";
@@ -103,27 +104,47 @@ function PureArtifact({
   const [mode, setMode] = useState<"edit" | "diff">("edit");
   const [document, setDocument] = useState<Document | null>(null);
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
+  const initializedArtifactKeyRef = useRef<string | null>(null);
+  const setMetadataRef = useRef(setMetadata);
 
   const { open: isSidebarOpen } = useSidebar();
+
+  useEffect(() => {
+    setMetadataRef.current = setMetadata;
+  }, [setMetadata]);
 
   useEffect(() => {
     if (documents && documents.length > 0) {
       const mostRecentDocument = documents.at(-1);
 
       if (mostRecentDocument) {
-        setDocument(mostRecentDocument);
-        setCurrentVersionIndex(documents.length - 1);
-        setArtifact((currentArtifact) => ({
-          ...currentArtifact,
-          content: mostRecentDocument.content ?? "",
-        }));
+        const nextContent = mostRecentDocument.content ?? "";
+
+        setDocument((currentDocument) => {
+          if (
+            currentDocument?.id === mostRecentDocument.id &&
+            currentDocument?.content === mostRecentDocument.content
+          ) {
+            return currentDocument;
+          }
+
+          return mostRecentDocument;
+        });
+
+        setCurrentVersionIndex((currentIndex) => {
+          const latestIndex = documents.length - 1;
+          return currentIndex === latestIndex ? currentIndex : latestIndex;
+        });
+
+        if (artifact.content !== nextContent) {
+          setArtifact((currentArtifact) => ({
+            ...currentArtifact,
+            content: nextContent,
+          }));
+        }
       }
     }
-  }, [documents, setArtifact]);
-
-  useEffect(() => {
-    mutateDocuments();
-  }, [mutateDocuments]);
+  }, [artifact.content, documents]);
 
   const { mutate } = useSWRConfig();
   const [isContentDirty, setIsContentDirty] = useState(false);
@@ -254,13 +275,20 @@ function PureArtifact({
   }
 
   useEffect(() => {
+    const initializeKey = `${artifact.documentId}:${artifact.kind}`;
+
+    if (initializedArtifactKeyRef.current === initializeKey) {
+      return;
+    }
+
     if (artifact.documentId !== "init" && artifactDefinition.initialize) {
+      initializedArtifactKeyRef.current = initializeKey;
       artifactDefinition.initialize({
         documentId: artifact.documentId,
-        setMetadata,
+        setMetadata: setMetadataRef.current,
       });
     }
-  }, [artifact.documentId, artifactDefinition, setMetadata]);
+  }, [artifact.documentId, artifact.kind, artifactDefinition]);
 
   return (
     <AnimatePresence>
@@ -328,6 +356,7 @@ function PureArtifact({
                   isReadonly={isReadonly}
                   messages={messages}
                   regenerate={regenerate}
+                  selectedVisibilityType={selectedVisibilityType}
                   setMessages={setMessages}
                   status={status}
                   votes={votes}
@@ -521,7 +550,7 @@ export const Artifact = memo(PureArtifact, (prevProps, nextProps) => {
   if (prevProps.input !== nextProps.input) {
     return false;
   }
-  if (!equal(prevProps.messages, nextProps.messages.length)) {
+  if (!equal(prevProps.messages, nextProps.messages)) {
     return false;
   }
   if (prevProps.selectedVisibilityType !== nextProps.selectedVisibilityType) {

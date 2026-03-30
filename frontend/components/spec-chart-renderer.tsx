@@ -106,7 +106,7 @@ function formatTooltipValue(value: unknown) {
 }
 
 export function SpecChartRenderer({ rows, visualizationSpec }: SpecChartRendererProps) {
-  const { containerRef, ready, widthBucket } = useSizeBreakpoints({
+  const { containerRef, ready, width, height, widthBucket } = useSizeBreakpoints({
     widthBreakpoints: [640, 920, 1240],
     heightBreakpoints: [260, 320, 400],
   });
@@ -257,8 +257,8 @@ export function SpecChartRenderer({ rows, visualizationSpec }: SpecChartRenderer
       )}
 
       <div className="h-80 w-full min-w-0" ref={containerRef}>
-        {ready ? (
-          <ResponsiveContainer height="100%" minHeight={320} minWidth={0} width="100%">
+        {ready && width > 0 && height > 0 ? (
+          <ResponsiveContainer height={height} minHeight={320} minWidth={0} width={width}>
             {useAreaStyle && primarySeries?.field ? (
               <AreaChart
                 data={prepared.chartRows}

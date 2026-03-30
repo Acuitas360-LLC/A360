@@ -77,13 +77,20 @@ export function useArtifact() {
       }
     );
 
+  const setMetadata = useCallback(
+    (updater: any) => {
+      return setLocalArtifactMetadata(updater, { revalidate: false });
+    },
+    [setLocalArtifactMetadata]
+  );
+
   return useMemo(
     () => ({
       artifact,
       setArtifact,
       metadata: localArtifactMetadata,
-      setMetadata: setLocalArtifactMetadata,
+      setMetadata,
     }),
-    [artifact, setArtifact, localArtifactMetadata, setLocalArtifactMetadata]
+    [artifact, localArtifactMetadata, setArtifact, setMetadata]
   );
 }

@@ -21,6 +21,12 @@ function Toast(props: ToastProps) {
 
   const descriptionRef = useRef<HTMLDivElement>(null);
   const [multiLine, setMultiLine] = useState(false);
+  const frameRef = useRef<number | null>(null);
+  const multiLineRef = useRef(false);
+
+  useEffect(() => {
+    multiLineRef.current = multiLine;
+  }, [multiLine]);
 
   useEffect(() => {
     const el = descriptionRef.current;
@@ -29,16 +35,36 @@ function Toast(props: ToastProps) {
     }
 
     const update = () => {
-      const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight);
-      const lines = Math.round(el.scrollHeight / lineHeight);
-      setMultiLine(lines > 1);
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+      }
+
+      frameRef.current = requestAnimationFrame(() => {
+        const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight);
+
+        if (!Number.isFinite(lineHeight) || lineHeight <= 0) {
+          return;
+        }
+
+        const lines = Math.round(el.scrollHeight / lineHeight);
+        const nextMultiLine = lines > 1;
+
+        if (multiLineRef.current !== nextMultiLine) {
+          setMultiLine(nextMultiLine);
+        }
+      });
     };
 
     update(); // initial check
     const ro = new ResizeObserver(update); // re-check on width changes
     ro.observe(el);
 
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+      }
+    };
   }, []);
 
   return (

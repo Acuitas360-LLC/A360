@@ -30,6 +30,9 @@ export async function PATCH(request: Request) {
     chatId?: string;
     messageId?: string;
     type?: "up" | "down";
+    feedbackText?: string;
+    userQuery?: string;
+    assistantResponse?: string;
   };
 
   if (!body.chatId || !body.messageId || !body.type) {
@@ -43,6 +46,9 @@ export async function PATCH(request: Request) {
       thread_id: body.chatId,
       message_id: body.messageId,
       rating: body.type === "up" ? 1 : -1,
+      feedback_text: body.feedbackText?.trim() || undefined,
+      user_query: body.userQuery?.trim() || undefined,
+      assistant_response: body.assistantResponse?.trim() || undefined,
     }),
   });
 
@@ -51,7 +57,14 @@ export async function PATCH(request: Request) {
     return new ChatbotError("bad_request:vote", detail || "Vote save failed").toResponse();
   }
 
-  const result = (await backendResponse.json()) as { inserted: boolean };
+  const result = (await backendResponse.json()) as {
+    inserted: boolean;
+    updated?: boolean;
+  };
 
-  return Response.json({ success: true, inserted: result.inserted });
+  return Response.json({
+    success: true,
+    inserted: result.inserted,
+    updated: Boolean(result.updated),
+  });
 }

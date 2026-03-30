@@ -53,6 +53,18 @@ type HistoryMessage = {
   parts?: HistoryMessagePart[];
 };
 
+type EmittableDataPartType =
+  | "data-resultSummary"
+  | "data-sqlQuery"
+  | "data-sqlResult"
+  | "data-sqlColumns"
+  | "data-sqlRowCount"
+  | "data-visualizationCode"
+  | "data-visualizationSpec"
+  | "data-visualizationFigure"
+  | "data-visualizationMeta"
+  | "data-relevantQuestions";
+
 function extractQuestion(body: { message?: RequestMessage; messages?: RequestMessage[] }): string {
   const candidate = body.message ?? body.messages?.at(-1);
   if (!candidate?.parts?.length) return "";
@@ -87,42 +99,105 @@ async function* parseSseEvents(
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
+  const getSeparator = (value: string): { index: number; length: number } => {
+    const lfIndex = value.indexOf("\n\n");
+    const crlfIndex = value.indexOf("\r\n\r\n");
 
-    if (done) {
-      break;
+    if (lfIndex === -1 && crlfIndex === -1) {
+      return { index: -1, length: 0 };
     }
 
-    buffer += decoder.decode(value, { stream: true });
+    if (lfIndex === -1) {
+      return { index: crlfIndex, length: 4 };
+    }
 
+    if (crlfIndex === -1) {
+      return { index: lfIndex, length: 2 };
+    }
+
+    return lfIndex < crlfIndex
+      ? { index: lfIndex, length: 2 }
+      : { index: crlfIndex, length: 4 };
+  };
+
+  const parseRawEvent = (rawEvent: string): SseEvent | null => {
+    const lines = rawEvent.split(/\r?\n/);
+    let eventName = "message";
+    const dataLines: string[] = [];
+
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        eventName = line.slice(6).trim();
+        continue;
+      }
+
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trimStart());
+      }
+    }
+
+    if (dataLines.length === 0) {
+      return null;
+    }
+
+    return { event: eventName, data: dataLines.join("\n") };
+  };
+
+  try {
     while (true) {
-      const separatorIndex = buffer.indexOf("\n\n");
-      if (separatorIndex < 0) {
+      const { done, value } = await reader.read();
+
+      if (done) {
         break;
       }
 
-      const rawEvent = buffer.slice(0, separatorIndex);
-      buffer = buffer.slice(separatorIndex + 2);
+      buffer += decoder.decode(value, { stream: true });
 
-      const lines = rawEvent.split(/\r?\n/);
-      let eventName = "message";
-      const dataLines: string[] = [];
-
-      for (const line of lines) {
-        if (line.startsWith("event:")) {
-          eventName = line.slice(6).trim();
-          continue;
+      while (true) {
+        const separator = getSeparator(buffer);
+        if (separator.index < 0) {
+          break;
         }
 
-        if (line.startsWith("data:")) {
-          dataLines.push(line.slice(5).trimStart());
+        const rawEvent = buffer.slice(0, separator.index);
+        buffer = buffer.slice(separator.index + separator.length);
+
+        const parsed = parseRawEvent(rawEvent);
+        if (parsed) {
+          yield parsed;
         }
       }
+    }
 
-      if (dataLines.length > 0) {
-        yield { event: eventName, data: dataLines.join("\n") };
+    // Flush decoder tail and parse any trailing event that may not end with \n\n.
+    buffer += decoder.decode();
+
+    while (true) {
+      const separator = getSeparator(buffer);
+      if (separator.index < 0) {
+        break;
       }
+
+      const rawEvent = buffer.slice(0, separator.index);
+      buffer = buffer.slice(separator.index + separator.length);
+      const parsed = parseRawEvent(rawEvent);
+      if (parsed) {
+        yield parsed;
+      }
+    }
+
+    const trailingEvent = buffer.trim();
+    if (trailingEvent) {
+      const parsed = parseRawEvent(trailingEvent);
+      if (parsed) {
+        yield parsed;
+      }
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      // Reader may already be closed.
     }
   }
 }
@@ -197,9 +272,14 @@ export async function POST(req: Request) {
 
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
+        const TEXT_DELTA_FLUSH_MS = 40;
         const textId = "assistant-text";
         let textStarted = false;
         let textEnded = false;
+        let emittedAssistantText = "";
+        let bufferedAssistantText = "";
+        let textFlushTimer: ReturnType<typeof setTimeout> | null = null;
+        const emittedPayloadByType = new Map<string, string>();
         const emittedDataParts = {
           sqlQuery: false,
           sqlResult: false,
@@ -212,15 +292,85 @@ export async function POST(req: Request) {
           relevantQuestions: false,
         };
 
+        const writeDataPartIfChanged = (type: EmittableDataPartType, data: unknown) => {
+          let digest = "";
+
+          if (typeof data === "string") {
+            digest = data;
+          } else {
+            try {
+              digest = JSON.stringify(data);
+            } catch {
+              digest = String(data);
+            }
+          }
+
+          const previousDigest = emittedPayloadByType.get(type);
+          if (previousDigest === digest) {
+            return false;
+          }
+
+          emittedPayloadByType.set(type, digest);
+          writer.write({ type, data });
+          return true;
+        };
+
+        const flushBufferedAssistantText = () => {
+          if (!bufferedAssistantText) {
+            return;
+          }
+
+          if (!textStarted || textEnded) {
+            bufferedAssistantText = "";
+            return;
+          }
+
+          writer.write({ type: "text-delta", id: textId, delta: bufferedAssistantText });
+          emittedAssistantText += bufferedAssistantText;
+          bufferedAssistantText = "";
+        };
+
+        const scheduleTextFlush = () => {
+          if (textFlushTimer) {
+            return;
+          }
+
+          textFlushTimer = setTimeout(() => {
+            textFlushTimer = null;
+            flushBufferedAssistantText();
+          }, TEXT_DELTA_FLUSH_MS);
+        };
+
+        const appendAssistantTextDelta = (delta: string) => {
+          if (!delta) {
+            return;
+          }
+
+          bufferedAssistantText += delta;
+          scheduleTextFlush();
+        };
+
+        const flushAndClearTextTimer = () => {
+          if (textFlushTimer) {
+            clearTimeout(textFlushTimer);
+            textFlushTimer = null;
+          }
+
+          flushBufferedAssistantText();
+        };
+
         const reconcileMissingDataParts = async () => {
-          try {
+          const needsAnyBackfill = () =>
+            Object.values(emittedDataParts).some((isEmitted) => !isEmitted);
+
+          const fetchLatestAssistantParts = async (): Promise<HistoryMessagePart[]> => {
             const historyResponse = await fetch(
               `${BACKEND_API_BASE_URL}/api/v1/history/${encodeURIComponent(threadId)}`,
               { cache: "no-store" }
             );
 
             if (!historyResponse.ok) {
-              return;
+              return [];
             }
 
             const historyPayload = (await historyResponse.json()) as {
@@ -233,10 +383,11 @@ export async function POST(req: Request) {
             const latestAssistant = [...messages]
               .reverse()
               .find((message) => message.role === "assistant");
-            const latestParts = Array.isArray(latestAssistant?.parts)
-              ? latestAssistant.parts
-              : [];
 
+            return Array.isArray(latestAssistant?.parts) ? latestAssistant.parts : [];
+          };
+
+          const emitMissingPartsFrom = (latestParts: HistoryMessagePart[]) => {
             const findLatestData = (partType: string) =>
               [...latestParts]
                 .reverse()
@@ -244,17 +395,17 @@ export async function POST(req: Request) {
 
             const sqlQuery = findLatestData("data-sqlQuery");
             if (!emittedDataParts.sqlQuery && typeof sqlQuery === "string" && sqlQuery.trim()) {
-              writer.write({ type: "data-sqlQuery", data: sqlQuery });
+              emittedDataParts.sqlQuery = writeDataPartIfChanged("data-sqlQuery", sqlQuery);
             }
 
             const sqlResult = findLatestData("data-sqlResult");
             if (!emittedDataParts.sqlResult && sqlResult && typeof sqlResult === "object") {
-              writer.write({ type: "data-sqlResult", data: sqlResult });
+              emittedDataParts.sqlResult = writeDataPartIfChanged("data-sqlResult", sqlResult);
             }
 
             const sqlColumns = findLatestData("data-sqlColumns");
             if (!emittedDataParts.sqlColumns && Array.isArray(sqlColumns) && sqlColumns.length > 0) {
-              writer.write({ type: "data-sqlColumns", data: sqlColumns });
+              emittedDataParts.sqlColumns = writeDataPartIfChanged("data-sqlColumns", sqlColumns);
             }
 
             const sqlRowCount = findLatestData("data-sqlRowCount");
@@ -263,7 +414,32 @@ export async function POST(req: Request) {
               typeof sqlRowCount === "number" &&
               Number.isFinite(sqlRowCount)
             ) {
-              writer.write({ type: "data-sqlRowCount", data: sqlRowCount });
+              emittedDataParts.sqlRowCount = writeDataPartIfChanged(
+                "data-sqlRowCount",
+                sqlRowCount
+              );
+            }
+
+            const resultSummary = findLatestData("data-resultSummary");
+            if (
+              typeof resultSummary === "string" &&
+              resultSummary.trim()
+            ) {
+              const normalizedSummary = resultSummary.trim();
+              if (!textStarted) {
+                writer.write({ type: "text-start", id: textId });
+                textStarted = true;
+                appendAssistantTextDelta(normalizedSummary);
+                flushAndClearTextTimer();
+              } else if (
+                !textEnded &&
+                normalizedSummary.length > emittedAssistantText.length &&
+                normalizedSummary.startsWith(emittedAssistantText)
+              ) {
+                const missingTail = normalizedSummary.slice(emittedAssistantText.length);
+                appendAssistantTextDelta(missingTail);
+                flushAndClearTextTimer();
+              }
             }
 
             const visualizationCode = findLatestData("data-visualizationCode");
@@ -272,7 +448,10 @@ export async function POST(req: Request) {
               typeof visualizationCode === "string" &&
               visualizationCode.trim()
             ) {
-              writer.write({ type: "data-visualizationCode", data: visualizationCode });
+              emittedDataParts.visualizationCode = writeDataPartIfChanged(
+                "data-visualizationCode",
+                visualizationCode
+              );
             }
 
             const visualizationSpec = findLatestData("data-visualizationSpec");
@@ -281,7 +460,10 @@ export async function POST(req: Request) {
               typeof visualizationSpec === "string" &&
               visualizationSpec.trim()
             ) {
-              writer.write({ type: "data-visualizationSpec", data: visualizationSpec });
+              emittedDataParts.visualizationSpec = writeDataPartIfChanged(
+                "data-visualizationSpec",
+                visualizationSpec
+              );
             }
 
             const visualizationFigure = findLatestData("data-visualizationFigure");
@@ -290,7 +472,10 @@ export async function POST(req: Request) {
               visualizationFigure &&
               typeof visualizationFigure === "object"
             ) {
-              writer.write({ type: "data-visualizationFigure", data: visualizationFigure });
+              emittedDataParts.visualizationFigure = writeDataPartIfChanged(
+                "data-visualizationFigure",
+                visualizationFigure
+              );
             }
 
             const visualizationMeta = findLatestData("data-visualizationMeta");
@@ -299,7 +484,10 @@ export async function POST(req: Request) {
               visualizationMeta &&
               typeof visualizationMeta === "object"
             ) {
-              writer.write({ type: "data-visualizationMeta", data: visualizationMeta });
+              emittedDataParts.visualizationMeta = writeDataPartIfChanged(
+                "data-visualizationMeta",
+                visualizationMeta
+              );
             }
 
             const relevantQuestions = findLatestData("data-relevantQuestions");
@@ -308,39 +496,35 @@ export async function POST(req: Request) {
               Array.isArray(relevantQuestions) &&
               relevantQuestions.length > 0
             ) {
-              writer.write({ type: "data-relevantQuestions", data: relevantQuestions });
+              emittedDataParts.relevantQuestions = writeDataPartIfChanged(
+                "data-relevantQuestions",
+                relevantQuestions
+              );
+            }
+          };
+
+          try {
+            const maxAttempts = 4;
+            for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+              const latestParts = await fetchLatestAssistantParts();
+              if (latestParts.length > 0) {
+                emitMissingPartsFrom(latestParts);
+              }
+
+              if (!needsAnyBackfill()) {
+                break;
+              }
+
+              await sleep(180);
             }
           } catch {
             // Best effort only; live stream should still complete if history sync fails.
+            console.error("Failed to reconcile missing streamed data parts");
           }
         };
 
         const sleep = (ms: number) =>
           new Promise((resolve) => setTimeout(resolve, ms));
-
-        const pacedWriteText = async (text: string) => {
-          if (!text) {
-            return;
-          }
-
-          if (!textStarted || textEnded) {
-            return;
-          }
-
-          const chunkSize = 3;
-          for (let i = 0; i < text.length; i += chunkSize) {
-            if (textEnded) {
-              break;
-            }
-
-            const chunk = text.slice(i, i + chunkSize);
-            writer.write({ type: "text-delta", id: textId, delta: chunk });
-
-            // Small pacing to keep typing feel visible even if upstream tokens are bursty.
-            const delay = /[.!?]$/.test(chunk) ? 28 : /[,;:]$/.test(chunk) ? 18 : 10;
-            await sleep(delay);
-          }
-        };
 
         writer.write({ type: "start" });
 
@@ -364,25 +548,35 @@ export async function POST(req: Request) {
 
             const delta = String(payload.delta ?? "");
             if (delta) {
-              await pacedWriteText(delta);
+              appendAssistantTextDelta(delta);
             }
             continue;
           }
 
           if (event.event === "summary_done") {
+            flushAndClearTextTimer();
             const summary = String(payload.summary ?? "").trim();
             if (summary) {
-              writer.write({ type: "data-resultSummary", data: summary });
+              writeDataPartIfChanged("data-resultSummary", summary);
               if (!textStarted) {
                 writer.write({ type: "text-start", id: textId });
                 textStarted = true;
-                await pacedWriteText(
+                appendAssistantTextDelta(
                   buildAssistantText({
                     thread_id: threadId,
                     assistant_text: summary,
                     result_summary: summary,
                   })
                 );
+                flushAndClearTextTimer();
+              } else if (
+                !textEnded &&
+                summary.length > emittedAssistantText.length &&
+                summary.startsWith(emittedAssistantText)
+              ) {
+                const missingTail = summary.slice(emittedAssistantText.length);
+                appendAssistantTextDelta(missingTail);
+                flushAndClearTextTimer();
               }
             }
 
@@ -396,8 +590,7 @@ export async function POST(req: Request) {
           if (event.event === "sql_ready") {
             const sqlQuery = payload.sql_query;
             if (typeof sqlQuery === "string" && sqlQuery.trim()) {
-              writer.write({ type: "data-sqlQuery", data: sqlQuery });
-              emittedDataParts.sqlQuery = true;
+              emittedDataParts.sqlQuery = writeDataPartIfChanged("data-sqlQuery", sqlQuery);
             }
             continue;
           }
@@ -405,19 +598,22 @@ export async function POST(req: Request) {
           if (event.event === "results_ready") {
             const sqlResult = payload.sql_result;
             if (sqlResult && typeof sqlResult === "object") {
-              writer.write({ type: "data-sqlResult", data: sqlResult });
-              emittedDataParts.sqlResult = true;
+              emittedDataParts.sqlResult = writeDataPartIfChanged("data-sqlResult", sqlResult);
 
               const columns = (sqlResult as { columns?: unknown }).columns;
               if (Array.isArray(columns) && columns.length > 0) {
-                writer.write({ type: "data-sqlColumns", data: columns });
-                emittedDataParts.sqlColumns = true;
+                emittedDataParts.sqlColumns = writeDataPartIfChanged(
+                  "data-sqlColumns",
+                  columns
+                );
               }
 
               const rows = (sqlResult as { data?: unknown }).data;
               if (Array.isArray(rows)) {
-                writer.write({ type: "data-sqlRowCount", data: rows.length });
-                emittedDataParts.sqlRowCount = true;
+                emittedDataParts.sqlRowCount = writeDataPartIfChanged(
+                  "data-sqlRowCount",
+                  rows.length
+                );
               }
             }
             continue;
@@ -430,23 +626,31 @@ export async function POST(req: Request) {
             const visualizationMeta = payload.visualization_meta;
 
             if (typeof visualizationCode === "string" && visualizationCode.trim()) {
-              writer.write({ type: "data-visualizationCode", data: visualizationCode });
-              emittedDataParts.visualizationCode = true;
+              emittedDataParts.visualizationCode = writeDataPartIfChanged(
+                "data-visualizationCode",
+                visualizationCode
+              );
             }
 
             if (typeof visualizationSpec === "string" && visualizationSpec.trim()) {
-              writer.write({ type: "data-visualizationSpec", data: visualizationSpec });
-              emittedDataParts.visualizationSpec = true;
+              emittedDataParts.visualizationSpec = writeDataPartIfChanged(
+                "data-visualizationSpec",
+                visualizationSpec
+              );
             }
 
             if (visualizationFigure && typeof visualizationFigure === "object") {
-              writer.write({ type: "data-visualizationFigure", data: visualizationFigure });
-              emittedDataParts.visualizationFigure = true;
+              emittedDataParts.visualizationFigure = writeDataPartIfChanged(
+                "data-visualizationFigure",
+                visualizationFigure
+              );
             }
 
             if (visualizationMeta && typeof visualizationMeta === "object") {
-              writer.write({ type: "data-visualizationMeta", data: visualizationMeta });
-              emittedDataParts.visualizationMeta = true;
+              emittedDataParts.visualizationMeta = writeDataPartIfChanged(
+                "data-visualizationMeta",
+                visualizationMeta
+              );
             }
             continue;
           }
@@ -454,8 +658,10 @@ export async function POST(req: Request) {
           if (event.event === "related_questions_ready") {
             const relevantQuestions = payload.relevant_questions;
             if (Array.isArray(relevantQuestions) && relevantQuestions.length > 0) {
-              writer.write({ type: "data-relevantQuestions", data: relevantQuestions });
-              emittedDataParts.relevantQuestions = true;
+              emittedDataParts.relevantQuestions = writeDataPartIfChanged(
+                "data-relevantQuestions",
+                relevantQuestions
+              );
             }
             continue;
           }
@@ -471,7 +677,8 @@ export async function POST(req: Request) {
               writer.write({ type: "text-start", id: textId });
               textStarted = true;
             }
-            await pacedWriteText(`[[ERROR_RESPONSE]] ${detail}`);
+            appendAssistantTextDelta(`[[ERROR_RESPONSE]] ${detail}`);
+            flushAndClearTextTimer();
             if (!textEnded) {
               writer.write({ type: "text-end", id: textId });
               textEnded = true;
@@ -480,12 +687,16 @@ export async function POST(req: Request) {
           }
         }
 
+        flushAndClearTextTimer();
         await reconcileMissingDataParts();
 
         if (textStarted && !textEnded) {
+          flushAndClearTextTimer();
           writer.write({ type: "text-end", id: textId });
           textEnded = true;
         }
+
+        flushAndClearTextTimer();
 
         writer.write({ type: "finish" });
       },

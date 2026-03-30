@@ -46,7 +46,7 @@ function toNumber(value: unknown): number {
 const CHART_COLORS = ["#2a9d8f", "#e76f51", "#457b9d", "#f4a261"];
 
 export function QueryResultChart({ columns, rows }: QueryResultChartProps) {
-  const { containerRef, ready, widthBucket } = useSizeBreakpoints({
+  const { containerRef, ready, width, height, widthBucket } = useSizeBreakpoints({
     widthBreakpoints: [560, 840, 1120],
     heightBreakpoints: [220, 280, 360],
   });
@@ -97,8 +97,8 @@ export function QueryResultChart({ columns, rows }: QueryResultChartProps) {
     <div className="rounded-md border p-3">
       <p className="mb-2 text-muted-foreground text-xs">Chart Preview</p>
       <div className="h-72 w-full min-w-0" ref={containerRef}>
-        {ready ? (
-          <ResponsiveContainer height="100%" minHeight={280} minWidth={0} width="100%">
+        {ready && width > 0 && height > 0 ? (
+          <ResponsiveContainer height={height} minHeight={280} minWidth={0} width={width}>
             <BarChart data={chartRows} margin={{ top: 8, right: 8, bottom: 48, left: 4 }}>
               <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
               <XAxis

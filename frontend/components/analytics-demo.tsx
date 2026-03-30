@@ -95,7 +95,7 @@ const currencyTickFormatter = (value: number) => {
 };
 
 export function AnalyticsInsight() {
-  const { containerRef, ready, widthBucket } = useSizeBreakpoints({
+  const { containerRef, ready, width, height, widthBucket } = useSizeBreakpoints({
     widthBreakpoints: [640, 960, 1280],
     heightBreakpoints: [260, 320, 420],
   });
@@ -200,8 +200,8 @@ export function AnalyticsInsight() {
         </div>
 
         <div className="h-80 w-full min-w-0" ref={containerRef}>
-          {ready ? (
-            <ResponsiveContainer height="100%" minHeight={320} minWidth={0} width="100%">
+          {ready && width > 0 && height > 0 ? (
+            <ResponsiveContainer height={height} minHeight={320} minWidth={0} width={width}>
               <AreaChart data={rows} margin={{ top: 8, right: 12, left: 8, bottom: 6 }}>
               <defs>
                 <linearGradient id="revenueGradient" x1="0" x2="0" y1="0" y2="1">

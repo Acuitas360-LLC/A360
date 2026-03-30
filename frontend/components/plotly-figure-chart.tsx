@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useMemo } from "react";
 
 const Plot = dynamic(() => import("react-plotly.js"), {
   ssr: false,
@@ -58,44 +59,50 @@ export function PlotlyFigureChart({
   const isNormalized = mode === "normalized";
   const forceDateAxis = hasTimestampLikeX(figure.data);
 
-  const layout = {
-    autosize: true,
-    margin: { l: 24, r: 24, t: 32, b: 48 },
-    ...(figure.layout ?? {}),
-    ...(forceDateAxis
-      ? {
-          xaxis: {
-            ...(typeof (figure.layout as any)?.xaxis === "object"
-              ? (figure.layout as any).xaxis
-              : {}),
-            type: "date",
-          },
-        }
-      : {}),
-    ...(isNormalized
-      ? {
-          paper_bgcolor: "transparent",
-          plot_bgcolor: "transparent",
-          font: {
-            color: "hsl(var(--foreground))",
-            family: "var(--font-geist-sans)",
-          },
-          legend: {
-            ...(typeof (figure.layout as any)?.legend === "object"
-              ? (figure.layout as any).legend
-              : {}),
-            orientation: "h",
-            y: -0.2,
-          },
-        }
-      : {}),
-  };
+  const layout = useMemo(
+    () => ({
+      autosize: true,
+      margin: { l: 24, r: 24, t: 32, b: 48 },
+      ...(figure.layout ?? {}),
+      ...(forceDateAxis
+        ? {
+            xaxis: {
+              ...(typeof (figure.layout as any)?.xaxis === "object"
+                ? (figure.layout as any).xaxis
+                : {}),
+              type: "date",
+            },
+          }
+        : {}),
+      ...(isNormalized
+        ? {
+            paper_bgcolor: "transparent",
+            plot_bgcolor: "transparent",
+            font: {
+              color: "hsl(var(--foreground))",
+              family: "var(--font-geist-sans)",
+            },
+            legend: {
+              ...(typeof (figure.layout as any)?.legend === "object"
+                ? (figure.layout as any).legend
+                : {}),
+              orientation: "h",
+              y: -0.2,
+            },
+          }
+        : {}),
+    }),
+    [figure.layout, forceDateAxis, isNormalized]
+  );
 
-  const config = {
-    displaylogo: false,
-    responsive: true,
-    ...(figure.config ?? {}),
-  };
+  const config = useMemo(
+    () => ({
+      displaylogo: false,
+      responsive: false,
+      ...(figure.config ?? {}),
+    }),
+    [figure.config]
+  );
 
   const PlotComponent = Plot as any;
 
@@ -108,7 +115,6 @@ export function PlotlyFigureChart({
           frames={figure.frames}
           layout={layout}
           style={{ height: "100%", width: "100%" }}
-          useResizeHandler
         />
       </div>
     </div>

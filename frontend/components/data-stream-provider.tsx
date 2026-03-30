@@ -23,7 +23,11 @@ export function DataStreamProvider({
     []
   );
 
-  const value = useMemo(() => ({ dataStream, setDataStream }), [dataStream]);
+  // Split into two useMemos to keep setDataStream stable
+  const value = useMemo(
+    () => ({ dataStream, setDataStream }),
+    [dataStream]
+  );
 
   return (
     <DataStreamContext.Provider value={value}>

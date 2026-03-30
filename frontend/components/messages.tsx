@@ -3,7 +3,6 @@ import { ArrowDownIcon } from "lucide-react";
 import { useMessages } from "@/hooks/use-messages";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
-import { useDataStream } from "./data-stream-provider";
 import { Greeting } from "./greeting";
 import { PreviewMessage, ThinkingMessage } from "./message";
 import type { VisibilityType } from "./visibility-selector";
@@ -22,6 +21,10 @@ type MessagesProps = {
   selectedVisibilityType: VisibilityType;
   onEditFailedResponse?: (errorMessageId: string) => void;
   onRetryFailedResponse?: (errorMessageId: string) => void;
+  onNegativeFeedbackRetry?: (
+    originalUserQuery: string,
+    feedbackText: string
+  ) => void;
 };
 
 function PureMessages({
@@ -37,6 +40,7 @@ function PureMessages({
   selectedVisibilityType,
   onEditFailedResponse,
   onRetryFailedResponse,
+  onNegativeFeedbackRetry,
 }: MessagesProps) {
   const {
     containerRef: messagesContainerRef,
@@ -47,8 +51,6 @@ function PureMessages({
   } = useMessages({
     status,
   });
-
-  useDataStream();
 
   const latestUserIndex = [...messages]
     .map((message, index) => ({ message, index }))
@@ -62,18 +64,48 @@ function PureMessages({
             return false;
           }
 
-          return message.parts.some(
-            (part) => part.type === "text" && Boolean(part.text?.trim())
-          );
+          return message.parts.some((part) => {
+            if (part.type === "text") {
+              return Boolean(part.text?.trim());
+            }
+
+            return (
+              part.type === "data-resultSummary" ||
+              part.type === "data-sqlQuery" ||
+              part.type === "data-sqlColumns" ||
+              part.type === "data-sqlResult" ||
+              part.type === "data-sqlRowCount" ||
+              part.type === "data-visualizationCode" ||
+              part.type === "data-visualizationSpec" ||
+              part.type === "data-visualizationFigure" ||
+              part.type === "data-visualizationMeta" ||
+              part.type === "data-relevantQuestions"
+            );
+          });
         })
       : messages.some((message) => {
           if (message.role !== "assistant") {
             return false;
           }
 
-          return message.parts.some(
-            (part) => part.type === "text" && Boolean(part.text?.trim())
-          );
+          return message.parts.some((part) => {
+            if (part.type === "text") {
+              return Boolean(part.text?.trim());
+            }
+
+            return (
+              part.type === "data-resultSummary" ||
+              part.type === "data-sqlQuery" ||
+              part.type === "data-sqlColumns" ||
+              part.type === "data-sqlResult" ||
+              part.type === "data-sqlRowCount" ||
+              part.type === "data-visualizationCode" ||
+              part.type === "data-visualizationSpec" ||
+              part.type === "data-visualizationFigure" ||
+              part.type === "data-visualizationMeta" ||
+              part.type === "data-relevantQuestions"
+            );
+          });
         });
 
   return (
@@ -96,7 +128,17 @@ function PureMessages({
               key={message.id}
               message={message}
               onEditFailedResponse={onEditFailedResponse}
+              onNegativeFeedbackRetry={onNegativeFeedbackRetry}
               onRetryFailedResponse={onRetryFailedResponse}
+              previousUserQuery={
+                [...messages.slice(0, index)]
+                  .reverse()
+                  .find((candidate) => candidate.role === "user")
+                  ?.parts?.filter((part) => part.type === "text")
+                  .map((part) => part.text)
+                  .join("\n")
+                  .trim() || ""
+              }
               regenerate={regenerate}
               requiresScrollPadding={
                 hasSentMessage && index === messages.length - 1

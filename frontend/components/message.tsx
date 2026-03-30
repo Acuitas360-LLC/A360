@@ -5,7 +5,6 @@ import { AnalyticsInsight } from "@/components/analytics-demo";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
-import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
 import { MessageContent } from "./elements/message";
@@ -43,6 +42,8 @@ const PurePreviewMessage = ({
   selectedVisibilityType,
   onEditFailedResponse,
   onRetryFailedResponse,
+  onNegativeFeedbackRetry,
+  previousUserQuery,
 }: {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   chatId: string;
@@ -56,6 +57,11 @@ const PurePreviewMessage = ({
   selectedVisibilityType: VisibilityType;
   onEditFailedResponse?: (errorMessageId: string) => void;
   onRetryFailedResponse?: (errorMessageId: string) => void;
+  onNegativeFeedbackRetry?: (
+    originalUserQuery: string,
+    feedbackText: string
+  ) => void;
+  previousUserQuery: string;
 }) => {
   const [mode, setMode] = useState<"view" | "edit">("view");
 
@@ -148,6 +154,18 @@ const PurePreviewMessage = ({
     .reverse()
     .find((part) => Array.isArray(part.data) && part.data.length > 0);
 
+  const hasStructuredInsightData = Boolean(
+    sqlQuery?.data ||
+      resultSummary?.data ||
+      (latestSqlColumns?.data && latestSqlColumns.data.length > 0) ||
+      (latestSqlResult?.data?.data && latestSqlResult.data.data.length > 0) ||
+      typeof latestSqlRowCount?.data === "number" ||
+      visualizationCode?.data ||
+      visualizationSpec?.data ||
+      (visualizationFigure?.data?.data && visualizationFigure.data.data.length > 0) ||
+      relevantQuestions?.data?.length
+  );
+
   const hasInlineErrorText = message.parts.some(
     (part) =>
       part.type === "text" &&
@@ -162,8 +180,6 @@ const PurePreviewMessage = ({
       !part.text.includes(ERROR_RESPONSE_MARKER) &&
       !part.text.includes(ANALYTICS_RESPONSE_MARKER)
   );
-
-  useDataStream();
 
   return (
     <div
@@ -511,7 +527,7 @@ const PurePreviewMessage = ({
           {message.role === "assistant" &&
             !isLoading &&
             !hasInlineErrorText &&
-            hasAssistantNarrativeText && (
+            (hasAssistantNarrativeText || hasStructuredInsightData) && (
             <SQLTransparencyPanel
               columns={latestSqlColumns?.data || latestSqlResult?.data?.columns}
               queryRows={latestSqlResult?.data?.data}
@@ -534,6 +550,8 @@ const PurePreviewMessage = ({
               isLoading={isLoading}
               key={`action-${message.id}`}
               message={message}
+              onNegativeFeedbackRetry={onNegativeFeedbackRetry}
+              previousUserQuery={previousUserQuery}
               setMode={setMode}
               vote={vote}
             />

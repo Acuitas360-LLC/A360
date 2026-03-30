@@ -2,10 +2,11 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
+import type { DataUIPart } from "ai";
 import { ChatHeader } from "@/components/chat-header";
 import {
   AlertDialog,
@@ -18,11 +19,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useArtifactSelector } from "@/hooks/use-artifact";
-import { useAutoResume } from "@/hooks/use-auto-resume";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import type { Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
-import type { Attachment, ChatMessage } from "@/lib/types";
+import type { Attachment, ChatMessage, CustomUIDataTypes } from "@/lib/types";
 import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Artifact } from "./artifact";
 import { useDataStream } from "./data-stream-provider";
@@ -36,6 +36,7 @@ const ANALYTICS_DEMO_TRIGGER = "give me my last 52 weeks analytics";
 const ANALYTICS_RESPONSE_MARKER = "[[ANALYTICS_52_WEEKS_RESPONSE]]";
 const ERROR_RESPONSE_MARKER = "[[ERROR_RESPONSE]]";
 const ANALYTICS_RESPONSE_DELAY_MS = 1200;
+const STREAM_PART_BATCH_WINDOW_MS = 40;
 
 export function Chat({
   id,
@@ -43,7 +44,7 @@ export function Chat({
   initialChatModel,
   initialVisibilityType,
   isReadonly,
-  autoResume,
+  autoResume: _autoResume,
 }: {
   id: string;
   initialMessages: ChatMessage[];
@@ -52,25 +53,12 @@ export function Chat({
   isReadonly: boolean;
   autoResume: boolean;
 }) {
-  const router = useRouter();
-
   const { visibilityType } = useChatVisibility({
     chatId: id,
     initialVisibilityType,
   });
 
   const { mutate } = useSWRConfig();
-
-  // Handle browser back/forward navigation
-  useEffect(() => {
-    const handlePopState = () => {
-      // When user navigates back/forward, refresh to sync with URL
-      router.refresh();
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [router]);
   const { setDataStream } = useDataStream();
 
   const [input, setInput] = useState<string>("");
@@ -94,18 +82,57 @@ export function Chat({
   const analyticsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const pendingDataPartsRef = useRef<DataUIPart<CustomUIDataTypes>[]>([]);
+  const dataPartFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushPendingDataParts = useCallback(() => {
+    if (dataPartFlushTimerRef.current) {
+      clearTimeout(dataPartFlushTimerRef.current);
+      dataPartFlushTimerRef.current = null;
+    }
+
+    if (!pendingDataPartsRef.current.length) {
+      return;
+    }
+
+    const partsToAppend = pendingDataPartsRef.current.splice(
+      0,
+      pendingDataPartsRef.current.length
+    );
+
+    setDataStream((current) =>
+      current ? [...current, ...partsToAppend] : partsToAppend
+    );
+  }, [setDataStream]);
+
+  const resetStreamingState = useCallback(() => {
+    if (dataPartFlushTimerRef.current) {
+      clearTimeout(dataPartFlushTimerRef.current);
+      dataPartFlushTimerRef.current = null;
+    }
+
+    pendingDataPartsRef.current.length = 0;
+    setDataStream([]);
+  }, [setDataStream]);
+
+  const queueIncomingDataPart = useCallback(
+    (dataPart: DataUIPart<CustomUIDataTypes>) => {
+      pendingDataPartsRef.current.push(dataPart);
+
+      if (dataPartFlushTimerRef.current) {
+        return;
+      }
+
+      dataPartFlushTimerRef.current = setTimeout(() => {
+        flushPendingDataParts();
+      }, STREAM_PART_BATCH_WINDOW_MS);
+    },
+    [flushPendingDataParts]
+  );
 
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
   }, [currentModelId]);
-
-  useEffect(() => {
-    return () => {
-      if (analyticsTimeoutRef.current) {
-        clearTimeout(analyticsTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const {
     messages,
@@ -114,7 +141,6 @@ export function Chat({
     status,
     stop,
     regenerate,
-    resumeStream,
     addToolApprovalResponse,
   } = useChat<ChatMessage>({
     id,
@@ -162,12 +188,23 @@ export function Chat({
       },
     }),
     onData: (dataPart) => {
-      setDataStream((ds) => (ds ? [...ds, dataPart] : []));
+      queueIncomingDataPart(dataPart);
     },
     onFinish: () => {
+      flushPendingDataParts();
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(`chat:${id}:pendingResume`);
+        window.sessionStorage.removeItem(`chat:${id}:lastRequestFailed`);
+      }
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
+      flushPendingDataParts();
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(`chat:${id}:pendingResume`);
+        window.sessionStorage.setItem(`chat:${id}:lastRequestFailed`, "1");
+      }
+
       const hasUsableAssistantResponseForCurrentTurn = (() => {
         const lastUserIndex = [...messages]
           .map((msg, idx) => ({ msg, idx }))
@@ -317,6 +354,21 @@ export function Chat({
   });
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const pendingKey = `chat:${id}:pendingResume`;
+
+    if (status === "submitted" || status === "streaming") {
+      window.sessionStorage.setItem(pendingKey, "1");
+      return;
+    }
+
+    window.sessionStorage.removeItem(pendingKey);
+  }, [id, status]);
+
+  useEffect(() => {
     setFailedPromptByErrorMessageId((current) => {
       let changed = false;
       const next = { ...current };
@@ -363,6 +415,13 @@ export function Chat({
         return sendMessage(...args);
       }
 
+      // Ensure at most one active stream before dispatching a new prompt.
+      stop();
+
+      // Start each turn from a clean transient stream state so follow-up
+      // prompts do not inherit stale buffered deltas from the previous turn.
+      resetStreamingState();
+
       const prompt = (message.parts ?? [])
         .filter((part) => part.type === "text")
         .map((part) => part.text)
@@ -401,7 +460,7 @@ export function Chat({
 
       return sendMessage(...args);
     },
-    [sendMessage, setMessages]
+    [resetStreamingState, sendMessage, setMessages, stop]
   );
 
   const handleRetryFailedResponse = useCallback(
@@ -437,6 +496,31 @@ export function Chat({
       setInput(failedPrompt);
     },
     [failedPromptByErrorMessageId]
+  );
+
+  const handleNegativeFeedbackRetry = useCallback(
+    (originalUserQuery: string, feedbackText: string) => {
+      const query = originalUserQuery.trim();
+      const feedback = feedbackText.trim();
+
+      if (!feedback) {
+        toast({
+          type: "error",
+          description: "Please describe what went wrong before retrying.",
+        });
+        return;
+      }
+
+      const retryPrompt = query
+        ? `Original question: ${query}\n\nWhat went wrong in the previous response: ${feedback}\n\nPlease regenerate the answer by correcting these issues.`
+        : `What went wrong in the previous response: ${feedback}\n\nPlease regenerate the answer by correcting these issues.`;
+
+      sendMessageWithDemo({
+        role: "user",
+        parts: [{ type: "text", text: retryPrompt }],
+      });
+    },
+    [sendMessageWithDemo]
   );
 
   useEffect(() => {
@@ -532,15 +616,12 @@ export function Chat({
 
   useEffect(() => {
     if (query && !hasAppendedQuery) {
-      sendMessageWithDemo({
-        role: "user" as const,
-        parts: [{ type: "text", text: query }],
-      });
+      setInput((current) => (current.trim().length > 0 ? current : query));
 
       setHasAppendedQuery(true);
       window.history.replaceState({}, "", `/chat/${id}`);
     }
-  }, [query, sendMessageWithDemo, hasAppendedQuery, id]);
+  }, [query, hasAppendedQuery, id]);
 
   const { data: votes } = useSWR<Vote[]>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
@@ -550,12 +631,15 @@ export function Chat({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
 
-  useAutoResume({
-    autoResume,
-    initialMessages,
-    resumeStream,
-    setMessages,
-  });
+  useEffect(() => {
+    return () => {
+      stop();
+      resetStreamingState();
+      if (analyticsTimeoutRef.current) {
+        clearTimeout(analyticsTimeoutRef.current);
+      }
+    };
+  }, [resetStreamingState, stop]);
 
   return (
     <>
@@ -573,6 +657,7 @@ export function Chat({
           isReadonly={isReadonly}
           messages={messages}
           onEditFailedResponse={handleEditFailedResponse}
+          onNegativeFeedbackRetry={handleNegativeFeedbackRetry}
           onRetryFailedResponse={handleRetryFailedResponse}
           regenerate={regenerate}
           selectedModelId={initialChatModel}
