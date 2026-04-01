@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
-import type { DataUIPart } from "ai";
 import { ChatHeader } from "@/components/chat-header";
 import {
   AlertDialog,
@@ -22,10 +21,10 @@ import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import type { Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
-import type { Attachment, ChatMessage, CustomUIDataTypes } from "@/lib/types";
+import { useStreamingStore } from "@/lib/streaming-store";
+import type { Attachment, ChatMessage } from "@/lib/types";
 import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Artifact } from "./artifact";
-import { useDataStream } from "./data-stream-provider";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
@@ -36,7 +35,6 @@ const ANALYTICS_DEMO_TRIGGER = "give me my last 52 weeks analytics";
 const ANALYTICS_RESPONSE_MARKER = "[[ANALYTICS_52_WEEKS_RESPONSE]]";
 const ERROR_RESPONSE_MARKER = "[[ERROR_RESPONSE]]";
 const ANALYTICS_RESPONSE_DELAY_MS = 1200;
-const STREAM_PART_BATCH_WINDOW_MS = 40;
 
 export function Chat({
   id,
@@ -59,7 +57,13 @@ export function Chat({
   });
 
   const { mutate } = useSWRConfig();
-  const { setDataStream } = useDataStream();
+  const enqueueDataPart = useStreamingStore((state) => state.enqueueDataPart);
+  const flushQueuedDataParts = useStreamingStore(
+    (state) => state.flushQueuedDataParts
+  );
+  const resetStreamState = useStreamingStore((state) => state.resetStreamState);
+  const beginRun = useStreamingStore((state) => state.beginRun);
+  const endRun = useStreamingStore((state) => state.endRun);
 
   const [input, setInput] = useState<string>("");
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
@@ -78,56 +82,12 @@ export function Chat({
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
   const [failedPromptByErrorMessageId, setFailedPromptByErrorMessageId] =
     useState<Record<string, string>>({});
+  const [pendingFeedbackRetry, setPendingFeedbackRetry] = useState<
+    { text: string } | null
+  >(null);
   const currentModelIdRef = useRef(currentModelId);
   const analyticsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
-  );
-  const pendingDataPartsRef = useRef<DataUIPart<CustomUIDataTypes>[]>([]);
-  const dataPartFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const flushPendingDataParts = useCallback(() => {
-    if (dataPartFlushTimerRef.current) {
-      clearTimeout(dataPartFlushTimerRef.current);
-      dataPartFlushTimerRef.current = null;
-    }
-
-    if (!pendingDataPartsRef.current.length) {
-      return;
-    }
-
-    const partsToAppend = pendingDataPartsRef.current.splice(
-      0,
-      pendingDataPartsRef.current.length
-    );
-
-    setDataStream((current) =>
-      current ? [...current, ...partsToAppend] : partsToAppend
-    );
-  }, [setDataStream]);
-
-  const resetStreamingState = useCallback(() => {
-    if (dataPartFlushTimerRef.current) {
-      clearTimeout(dataPartFlushTimerRef.current);
-      dataPartFlushTimerRef.current = null;
-    }
-
-    pendingDataPartsRef.current.length = 0;
-    setDataStream([]);
-  }, [setDataStream]);
-
-  const queueIncomingDataPart = useCallback(
-    (dataPart: DataUIPart<CustomUIDataTypes>) => {
-      pendingDataPartsRef.current.push(dataPart);
-
-      if (dataPartFlushTimerRef.current) {
-        return;
-      }
-
-      dataPartFlushTimerRef.current = setTimeout(() => {
-        flushPendingDataParts();
-      }, STREAM_PART_BATCH_WINDOW_MS);
-    },
-    [flushPendingDataParts]
   );
 
   useEffect(() => {
@@ -188,10 +148,11 @@ export function Chat({
       },
     }),
     onData: (dataPart) => {
-      queueIncomingDataPart(dataPart);
+      enqueueDataPart(dataPart);
     },
     onFinish: () => {
-      flushPendingDataParts();
+      flushQueuedDataParts();
+      endRun();
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem(`chat:${id}:pendingResume`);
         window.sessionStorage.removeItem(`chat:${id}:lastRequestFailed`);
@@ -199,7 +160,8 @@ export function Chat({
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
-      flushPendingDataParts();
+      flushQueuedDataParts();
+      endRun();
       if (typeof window !== "undefined") {
         window.sessionStorage.removeItem(`chat:${id}:pendingResume`);
         window.sessionStorage.setItem(`chat:${id}:lastRequestFailed`, "1");
@@ -420,7 +382,8 @@ export function Chat({
 
       // Start each turn from a clean transient stream state so follow-up
       // prompts do not inherit stale buffered deltas from the previous turn.
-      resetStreamingState();
+      resetStreamState();
+      beginRun(generateUUID());
 
       const prompt = (message.parts ?? [])
         .filter((part) => part.type === "text")
@@ -460,7 +423,7 @@ export function Chat({
 
       return sendMessage(...args);
     },
-    [resetStreamingState, sendMessage, setMessages, stop]
+    [beginRun, resetStreamState, sendMessage, setMessages, stop]
   );
 
   const handleRetryFailedResponse = useCallback(
@@ -500,7 +463,6 @@ export function Chat({
 
   const handleNegativeFeedbackRetry = useCallback(
     (originalUserQuery: string, feedbackText: string) => {
-      const query = originalUserQuery.trim();
       const feedback = feedbackText.trim();
 
       if (!feedback) {
@@ -511,17 +473,27 @@ export function Chat({
         return;
       }
 
-      const retryPrompt = query
-        ? `Original question: ${query}\n\nWhat went wrong in the previous response: ${feedback}\n\nPlease regenerate the answer by correcting these issues.`
-        : `What went wrong in the previous response: ${feedback}\n\nPlease regenerate the answer by correcting these issues.`;
-
-      sendMessageWithDemo({
-        role: "user",
-        parts: [{ type: "text", text: retryPrompt }],
-      });
+      setPendingFeedbackRetry({ text: feedback });
     },
     [sendMessageWithDemo]
   );
+
+  useEffect(() => {
+    if (!pendingFeedbackRetry) {
+      return;
+    }
+
+    if (status !== "ready") {
+      return;
+    }
+
+    const pending = pendingFeedbackRetry.text;
+    setPendingFeedbackRetry(null);
+    sendMessageWithDemo({
+      role: "user",
+      parts: [{ type: "text", text: pending }],
+    });
+  }, [pendingFeedbackRetry, sendMessageWithDemo, status]);
 
   useEffect(() => {
     const previousStatus = previousStatusRef.current;
@@ -634,12 +606,13 @@ export function Chat({
   useEffect(() => {
     return () => {
       stop();
-      resetStreamingState();
+      endRun();
+      resetStreamState();
       if (analyticsTimeoutRef.current) {
         clearTimeout(analyticsTimeoutRef.current);
       }
     };
-  }, [resetStreamingState, stop]);
+  }, [endRun, resetStreamState, stop]);
 
   return (
     <>

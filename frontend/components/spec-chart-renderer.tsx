@@ -40,7 +40,17 @@ type VisualizationSpec = {
   };
   formatting?: {
     tick_rotation?: number;
+    x_title?: string;
+    y_left_title?: string;
+    y_right_title?: string;
+    legend_position?: "top" | "bottom";
   };
+  annotations?: Array<{
+    type?: "hline";
+    axis?: "left" | "right";
+    value?: number;
+    label?: string;
+  }>;
 };
 
 type SpecChartRendererProps = {
@@ -55,7 +65,8 @@ function toNumber(value: unknown): number {
     return value;
   }
   if (typeof value === "string") {
-    const parsed = Number(value);
+    const cleaned = value.trim().replaceAll(",", "").replace("%", "");
+    const parsed = Number(cleaned);
     return Number.isFinite(parsed) ? parsed : 0;
   }
   return 0;
@@ -169,6 +180,10 @@ export function SpecChartRenderer({ rows, visualizationSpec }: SpecChartRenderer
       series: rawSeries,
       xType: parsed.x?.type,
       tickRotation: parsed.formatting?.tick_rotation ?? -35,
+      legendPosition: parsed.formatting?.legend_position ?? "bottom",
+      xTitle: parsed.formatting?.x_title ?? "",
+      yLeftTitle: parsed.formatting?.y_left_title ?? "",
+      yRightTitle: parsed.formatting?.y_right_title ?? "",
       intent: parsed.chart_intent || "chart",
       complexity: parsed.complexity || "single_series",
     };
@@ -194,6 +209,8 @@ export function SpecChartRenderer({ rows, visualizationSpec }: SpecChartRenderer
   });
 
   const hasRightAxis = prepared.series.some((series) => series.axis === "right");
+  const legendAlign = prepared.legendPosition === "top" ? "left" : "center";
+  const legendVerticalAlign = prepared.legendPosition === "top" ? "top" : "bottom";
 
   const primarySeries = visibleSeries[0];
   const isSingleSeries = visibleSeries.length === 1;
@@ -283,6 +300,17 @@ export function SpecChartRenderer({ rows, visualizationSpec }: SpecChartRenderer
                 tickFormatter={(value) => formatXLabel(String(value), prepared.xType)}
                 tickLine={false}
                 tickMargin={8}
+                label={
+                  prepared.xTitle
+                    ? {
+                        value: prepared.xTitle,
+                        position: "insideBottom",
+                        offset: 24,
+                        fill: "hsl(var(--muted-foreground))",
+                        fontSize: 10,
+                      }
+                    : undefined
+                }
               />
               <YAxis
                 axisLine={false}
@@ -290,6 +318,18 @@ export function SpecChartRenderer({ rows, visualizationSpec }: SpecChartRenderer
                 tickFormatter={(value) => formatTooltipValue(value)}
                 tickLine={false}
                 tickMargin={8}
+                label={
+                  prepared.yLeftTitle
+                    ? {
+                        value: prepared.yLeftTitle,
+                        angle: -90,
+                        position: "insideLeft",
+                        offset: 0,
+                        fill: "hsl(var(--muted-foreground))",
+                        fontSize: 10,
+                      }
+                    : undefined
+                }
               />
               <Tooltip
                 contentStyle={{
@@ -336,6 +376,18 @@ export function SpecChartRenderer({ rows, visualizationSpec }: SpecChartRenderer
                 tickLine={false}
                 tickMargin={8}
                 yAxisId="left"
+                label={
+                  prepared.yLeftTitle
+                    ? {
+                        value: prepared.yLeftTitle,
+                        angle: -90,
+                        position: "insideLeft",
+                        offset: 0,
+                        fill: "hsl(var(--muted-foreground))",
+                        fontSize: 10,
+                      }
+                    : undefined
+                }
               />
               {hasRightAxis && (
                 <YAxis
@@ -346,6 +398,18 @@ export function SpecChartRenderer({ rows, visualizationSpec }: SpecChartRenderer
                   tickLine={false}
                   tickMargin={8}
                   yAxisId="right"
+                  label={
+                    prepared.yRightTitle
+                      ? {
+                          value: prepared.yRightTitle,
+                          angle: 90,
+                          position: "insideRight",
+                          offset: 0,
+                          fill: "hsl(var(--muted-foreground))",
+                          fontSize: 10,
+                        }
+                      : undefined
+                  }
                 />
               )}
               <Tooltip
@@ -358,7 +422,7 @@ export function SpecChartRenderer({ rows, visualizationSpec }: SpecChartRenderer
                 formatter={(value, name) => [formatTooltipValue(value), String(name)]}
                 labelFormatter={(value) => formatXLabel(String(value), prepared.xType)}
               />
-              <Legend />
+              <Legend align={legendAlign} verticalAlign={legendVerticalAlign} />
               {visibleSeries.map((series, index) => {
                 const field = series.field as string;
                 const color = COLORS[index % COLORS.length];

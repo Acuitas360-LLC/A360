@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChartErrorBoundary } from "@/components/chart-error-boundary";
+import { EChartsSpecChart } from "@/components/echarts-spec-chart";
 import { PlotlyFigureChart } from "@/components/plotly-figure-chart";
 import { QueryResultChart } from "@/components/query-result-chart";
 import { SpecChartRenderer } from "@/components/spec-chart-renderer";
@@ -58,7 +59,6 @@ export function SQLTransparencyPanel({
   relevantQuestions,
 }: SQLTransparencyPanelProps) {
   const [showAllRows, setShowAllRows] = useState(false);
-  const [showDeterministicCharts, setShowDeterministicCharts] = useState(false);
   const isMarketingHead = selectedVisibilityType === "private";
 
   const visibleRows = useMemo(() => {
@@ -144,7 +144,7 @@ export function SQLTransparencyPanel({
     typeof rowCount === "number" ||
     Boolean(visualizationCode) ||
     Boolean(visualizationSpec) ||
-    Boolean(visualizationFigure?.data?.length) ||
+    Boolean(visualizationFigure) ||
     Boolean(relevantQuestions?.length);
 
   if (!hasContent) {
@@ -268,29 +268,14 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
-      {!!visualizationFigure?.data?.length && (
+      {visualizationFigure && (
         <div className="mb-3">
           <p className="mb-2 text-muted-foreground text-xs">
             Deterministic Plotly Charts
           </p>
-          {!showDeterministicCharts ? (
-            <div className="rounded-md border border-amber-300/60 bg-amber-50/40 p-2 text-xs text-amber-900">
-              Plotly charts are paused by default for stability in long streamed replies.
-              <Button
-                className="ml-2 h-7"
-                onClick={() => setShowDeterministicCharts(true)}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                Load Plotly chart
-              </Button>
-            </div>
-          ) : (
-            <ChartErrorBoundary>
-              <PlotlyFigureChart figure={visualizationFigure} mode="normalized" />
-            </ChartErrorBoundary>
-          )}
+          <ChartErrorBoundary>
+            <PlotlyFigureChart figure={visualizationFigure} mode="normalized" />
+          </ChartErrorBoundary>
           {visualizationMeta && (
             <div className="mt-2 rounded-md border bg-muted/30 p-2 text-xs">
               <p className="font-medium">Data Fidelity</p>
@@ -307,7 +292,7 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
-      {!!visualizationCode && !visualizationFigure?.data?.length && (
+      {!!visualizationCode && !visualizationFigure && (
         <div className="mb-3 rounded-md border border-amber-300/60 bg-amber-50/40 p-2 text-xs text-amber-900">
           Deterministic Plotly chart is unavailable for this response. Showing heuristic fallback below.
         </div>
@@ -335,6 +320,17 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
+      {!!queryRows?.length && !!visualizationSpec && (
+        <div className="mb-3">
+          <p className="mb-2 text-muted-foreground text-xs">
+            ECharts Spec Chart (comparison)
+          </p>
+          <ChartErrorBoundary>
+            <EChartsSpecChart rows={queryRows} visualizationSpec={visualizationSpec} />
+          </ChartErrorBoundary>
+        </div>
+      )}
+
       {visualizationCode && !isMarketingHead && (
         <div className="mb-3">
           <p className="mb-1 text-muted-foreground text-xs">Visualization Payload</p>
@@ -355,7 +351,7 @@ export function SQLTransparencyPanel({
 
       {!!relevantQuestions?.length && (
         <div>
-          <p className="mb-1 text-muted-foreground text-xs">Relevant Questions</p>
+          <p className="mb-1 text-muted-foreground text-xs">Potential Followup Questions</p>
           <ul className="list-disc pl-5 text-sm">
             {relevantQuestions.map((question) => (
               <li key={question}>{question}</li>

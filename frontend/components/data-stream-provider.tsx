@@ -2,8 +2,9 @@
 
 import type { DataUIPart } from "ai";
 import type React from "react";
-import { createContext, useContext, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { CustomUIDataTypes } from "@/lib/types";
+import { useStreamingStore } from "@/lib/streaming-store";
 
 type DataStreamContextValue = {
   dataStream: DataUIPart<CustomUIDataTypes>[];
@@ -12,34 +13,21 @@ type DataStreamContextValue = {
   >;
 };
 
-const DataStreamContext = createContext<DataStreamContextValue | null>(null);
-
 export function DataStreamProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [dataStream, setDataStream] = useState<DataUIPart<CustomUIDataTypes>[]>(
-    []
-  );
-
-  // Split into two useMemos to keep setDataStream stable
-  const value = useMemo(
-    () => ({ dataStream, setDataStream }),
-    [dataStream]
-  );
-
-  return (
-    <DataStreamContext.Provider value={value}>
-      {children}
-    </DataStreamContext.Provider>
-  );
+  // Compatibility wrapper: stream state now lives in centralized store.
+  return <>{children}</>;
 }
 
 export function useDataStream() {
-  const context = useContext(DataStreamContext);
-  if (!context) {
-    throw new Error("useDataStream must be used within a DataStreamProvider");
-  }
-  return context;
+  const dataStream = useStreamingStore((state) => state.dataStream);
+  const setDataStream = useStreamingStore((state) => state.setDataStream);
+
+  return useMemo<DataStreamContextValue>(
+    () => ({ dataStream, setDataStream }),
+    [dataStream, setDataStream]
+  );
 }

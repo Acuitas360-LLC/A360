@@ -62,7 +62,7 @@ export function PlotlyFigureChart({
   const layout = useMemo(
     () => ({
       autosize: true,
-      margin: { l: 24, r: 24, t: 32, b: 48 },
+      margin: { l: 24, r: 24, t: 64, b: 64 },
       ...(figure.layout ?? {}),
       ...(forceDateAxis
         ? {
@@ -87,7 +87,12 @@ export function PlotlyFigureChart({
                 ? (figure.layout as any).legend
                 : {}),
               orientation: "h",
-              y: -0.2,
+              x: 0,
+              y: 1.1,
+              xanchor: "left",
+              yanchor: "bottom",
+              bgcolor: "rgba(255,255,255,0.0)",
+              borderwidth: 0,
             },
           }
         : {}),
