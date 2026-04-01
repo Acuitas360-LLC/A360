@@ -25,7 +25,7 @@ import {
   PromptInputToolbar,
   PromptInputTools,
 } from "./elements/prompt-input";
-import { ArrowUpIcon, PaperclipIcon, PulseIcon, StopIcon } from "./icons";
+import { ArrowUpIcon, PulseIcon, StopIcon } from "./icons";
 import { PreviewAttachment } from "./preview-attachment";
 import { SuggestedActions } from "./suggested-actions";
 import { Button } from "./ui/button";
@@ -43,8 +43,9 @@ function PureMultimodalInput({
   setMessages,
   sendMessage,
   className,
+  prominent,
   selectedVisibilityType,
-  selectedModelId,
+  selectedModelId: _selectedModelId,
   onModelChange,
   onBulkUploadStart,
 }: {
@@ -59,6 +60,7 @@ function PureMultimodalInput({
   setMessages: UseChatHelpers<ChatMessage>["setMessages"];
   sendMessage: UseChatHelpers<ChatMessage>["sendMessage"];
   className?: string;
+  prominent?: boolean;
   selectedVisibilityType: VisibilityType;
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
@@ -352,18 +354,6 @@ function PureMultimodalInput({
 
   return (
     <div className={cn("relative flex w-full flex-col gap-4", className)}>
-      {!hasInteracted &&
-        messages.length === 0 &&
-        attachments.length === 0 &&
-        uploadQueue.length === 0 && (
-          <SuggestedActions
-            chatId={chatId}
-            onSuggestionSelected={() => setHasInteracted(true)}
-            selectedVisibilityType={selectedVisibilityType}
-            sendMessage={sendMessage}
-          />
-        )}
-
       <input
         className="pointer-events-none fixed -top-4 -left-4 size-0.5 opacity-0"
         multiple
@@ -374,7 +364,11 @@ function PureMultimodalInput({
       />
 
       <PromptInput
-        className="rounded-xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50"
+        className={cn(
+          "rounded-xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50",
+          prominent &&
+            "-translate-y-px border-border/70 bg-background/95 ring-1 ring-black/[0.06] shadow-sm supports-[backdrop-filter]:bg-background/85"
+        )}
         onSubmit={(event) => {
           event.preventDefault();
           if (!input.trim() && attachments.length === 0) {
@@ -428,7 +422,7 @@ function PureMultimodalInput({
             maxHeight={MAX_TEXTAREA_HEIGHT}
             minHeight={defaultTextareaHeightRef.current}
             onChange={handleInput}
-            placeholder="Send a message..."
+            placeholder="Ask your Query"
             ref={textareaRef}
             rows={1}
             value={input}
@@ -436,11 +430,6 @@ function PureMultimodalInput({
         </div>
         <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
           <PromptInputTools className="gap-0 sm:gap-0.5">
-            <AttachmentsButton
-              fileInputRef={fileInputRef}
-              selectedModelId={selectedModelId}
-              status={status}
-            />
             <BulkUploadSelector
               onConfigured={(config) => {
                 onBulkUploadStart?.(config.questions);
@@ -476,6 +465,20 @@ function PureMultimodalInput({
           )}
         </PromptInputToolbar>
       </PromptInput>
+
+      {!hasInteracted &&
+        messages.length === 0 &&
+        attachments.length === 0 &&
+        uploadQueue.length === 0 && (
+          <div className="pt-2 md:pt-3">
+            <SuggestedActions
+              chatId={chatId}
+              onSuggestionSelected={() => setHasInteracted(true)}
+              selectedVisibilityType={selectedVisibilityType}
+              sendMessage={sendMessage}
+            />
+          </div>
+        )}
     </div>
   );
 }
@@ -502,36 +505,6 @@ export const MultimodalInput = memo(
     return true;
   }
 );
-
-function PureAttachmentsButton({
-  fileInputRef,
-  status,
-  selectedModelId,
-}: {
-  fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
-  status: UseChatHelpers<ChatMessage>["status"];
-  selectedModelId: string;
-}) {
-  const isReasoningModel =
-    selectedModelId.includes("reasoning") || selectedModelId.includes("think");
-
-  return (
-    <Button
-      className="aspect-square h-8 rounded-lg p-1 transition-colors hover:bg-accent"
-      data-testid="attachments-button"
-      disabled={status !== "ready" || isReasoningModel}
-      onClick={(event) => {
-        event.preventDefault();
-        fileInputRef.current?.click();
-      }}
-      variant="ghost"
-    >
-      <PaperclipIcon size={14} style={{ width: 14, height: 14 }} />
-    </Button>
-  );
-}
-
-const AttachmentsButton = memo(PureAttachmentsButton);
 
 function PureStopButton({
   stop,

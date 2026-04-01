@@ -91,25 +91,10 @@ export function AppSidebar({
                 }}
               >
                 <span className="cursor-pointer rounded-md px-2 py-2 font-semibold text-2xl text-primary hover:bg-muted">
-                  ChatBot
+                  A360
                 </span>
               </Link>
               <div className="flex flex-row gap-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      className="h-8 p-1 md:h-fit md:p-2"
-                      onClick={() => setShowDeleteAllDialog(true)}
-                      type="button"
-                      variant="ghost"
-                    >
-                      <TrashIcon />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent align="end" className="hidden md:block">
-                    Delete All Chats
-                  </TooltipContent>
-                </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -128,6 +113,22 @@ export function AppSidebar({
                     New Chat
                   </TooltipContent>
                 </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      className="h-8 p-1 md:h-fit md:p-2"
+                      onClick={() => setShowDeleteAllDialog(true)}
+                      type="button"
+                      variant="ghost"
+                    >
+                      <TrashIcon />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent align="end" className="hidden md:block">
+                    Delete All Chats
+                  </TooltipContent>
+                </Tooltip>
+                
               </div>
             </div>
           </SidebarMenu>
@@ -147,7 +148,7 @@ export function AppSidebar({
             <AlertDialogTitle>Delete all chats?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete all
-              your chats and remove them from our servers.
+              your chats.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

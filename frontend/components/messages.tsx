@@ -1,4 +1,5 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
+import type { ReactNode } from "react";
 import { ArrowDownIcon } from "lucide-react";
 import { useMessages } from "@/hooks/use-messages";
 import type { Vote } from "@/lib/db/schema";
@@ -19,6 +20,7 @@ type MessagesProps = {
   isArtifactVisible: boolean;
   selectedModelId: string;
   selectedVisibilityType: VisibilityType;
+  initialInputSlot?: ReactNode;
   onEditFailedResponse?: (errorMessageId: string) => void;
   onRetryFailedResponse?: (errorMessageId: string) => void;
   onNegativeFeedbackRetry?: (
@@ -38,6 +40,7 @@ function PureMessages({
   isReadonly,
   selectedModelId: _selectedModelId,
   selectedVisibilityType,
+  initialInputSlot,
   onEditFailedResponse,
   onRetryFailedResponse,
   onNegativeFeedbackRetry,
@@ -114,8 +117,13 @@ function PureMessages({
         className="absolute inset-0 touch-pan-y overflow-y-auto bg-background"
         ref={messagesContainerRef}
       >
-        <div className="mx-auto flex min-w-0 max-w-4xl flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
-          {messages.length === 0 && <Greeting />}
+        <div className="mx-auto flex min-w-0 max-w-5xl flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
+          {messages.length === 0 && (
+            <>
+              <Greeting />
+              {initialInputSlot}
+            </>
+          )}
 
           {messages.map((message, index) => (
             <PreviewMessage
@@ -153,8 +161,8 @@ function PureMessages({
             />
           ))}
 
-          {(status === "submitted" ||
-            (status === "streaming" && !hasVisibleAssistantMessageForCurrentTurn)) &&
+          {((status === "submitted" || status === "streaming") &&
+            !hasVisibleAssistantMessageForCurrentTurn) &&
             !messages.some((msg) =>
               msg.parts?.some(
                 (part) => "state" in part && part.state === "approval-responded"

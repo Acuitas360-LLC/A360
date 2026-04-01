@@ -602,6 +602,7 @@ export function Chat({
 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
+  const isInitialHomeState = messages.length === 0;
 
   useEffect(() => {
     return () => {
@@ -626,6 +627,29 @@ export function Chat({
         <Messages
           addToolApprovalResponse={addToolApprovalResponse}
           chatId={id}
+          initialInputSlot={
+            isInitialHomeState && !isReadonly ? (
+              <div className="mx-auto mt-5 w-full max-w-5xl px-2 md:mt-6 md:px-4">
+                <MultimodalInput
+                  attachments={attachments}
+                  chatId={id}
+                  input={input}
+                  messages={messages}
+                  onBulkUploadStart={handleBulkUploadStart}
+                  onModelChange={setCurrentModelId}
+                  prominent={true}
+                  selectedModelId={currentModelId}
+                  selectedVisibilityType={visibilityType}
+                  sendMessage={sendMessageWithDemo}
+                  setAttachments={setAttachments}
+                  setInput={setInput}
+                  setMessages={setMessages}
+                  status={effectiveStatus}
+                  stop={stop}
+                />
+              </div>
+            ) : undefined
+          }
           isArtifactVisible={isArtifactVisible}
           isReadonly={isReadonly}
           messages={messages}
@@ -640,8 +664,8 @@ export function Chat({
           votes={votes}
         />
 
-        <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
-          {!isReadonly && (
+        <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-5xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+          {!isReadonly && !isInitialHomeState && (
             <MultimodalInput
               attachments={attachments}
               chatId={id}

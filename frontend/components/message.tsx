@@ -181,6 +181,26 @@ const PurePreviewMessage = ({
       !part.text.includes(ANALYTICS_RESPONSE_MARKER)
   );
 
+  const hasReasoningText = message.parts.some(
+    (part) => part.type === "reasoning" && part.text?.trim().length > 0
+  );
+
+  const hasToolContent = message.parts.some((part) =>
+    part.type.startsWith("tool-")
+  );
+
+  const hasRenderableAssistantContent =
+    hasInlineErrorText ||
+    hasAssistantNarrativeText ||
+    hasStructuredInsightData ||
+    hasReasoningText ||
+    hasToolContent ||
+    attachmentsFromMessage.length > 0;
+
+  if (message.role === "assistant" && !hasRenderableAssistantContent) {
+    return null;
+  }
+
   return (
     <div
       className="group/message fade-in w-full animate-in duration-200"
@@ -188,13 +208,13 @@ const PurePreviewMessage = ({
       data-testid={`message-${message.role}`}
     >
       <div
-        className={cn("flex w-full items-start gap-2 md:gap-3", {
+        className={cn("relative flex w-full items-start gap-2 md:gap-3", {
           "justify-end": message.role === "user" && mode !== "edit",
           "justify-start": message.role === "assistant",
         })}
       >
         {message.role === "assistant" && (
-          <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
+          <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:absolute md:-left-10 md:top-0">
             <SparklesIcon size={14} />
           </div>
         )}
@@ -204,13 +224,7 @@ const PurePreviewMessage = ({
             "gap-2 md:gap-4": message.parts?.some(
               (p) => p.type === "text" && p.text?.trim()
             ),
-            "w-full":
-              (message.role === "assistant" &&
-                (message.parts?.some(
-                  (p) => p.type === "text" && p.text?.trim()
-                ) ||
-                  message.parts?.some((p) => p.type.startsWith("tool-")))) ||
-              mode === "edit",
+            "min-w-0 flex-1": message.role === "assistant" || mode === "edit",
             "max-w-[calc(100%-2.5rem)] sm:max-w-[min(fit-content,80%)]":
               message.role === "user" && mode !== "edit",
           })}
@@ -571,14 +585,14 @@ export const ThinkingMessage = () => {
       data-role="assistant"
       data-testid="message-assistant-loading"
     >
-      <div className="flex items-start justify-start gap-3">
-        <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
+      <div className="relative flex items-start justify-start gap-3">
+        <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:absolute md:-left-10 md:top-0">
           <div className="animate-pulse">
             <SparklesIcon size={14} />
           </div>
         </div>
 
-        <div className="flex w-full flex-col gap-2 md:gap-4">
+        <div className="flex min-w-0 w-full flex-col gap-2 md:gap-4">
           <div className="flex items-center gap-1 p-0 text-muted-foreground text-sm">
             <span className="animate-pulse">Thinking</span>
             <span className="inline-flex">

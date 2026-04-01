@@ -22,19 +22,16 @@ export type VisibilityType = "private" | "public";
 const visibilities: Array<{
   id: VisibilityType;
   label: string;
-  description: string;
   icon: ReactNode;
 }> = [
   {
     id: "private",
-    label: "Marketing Head",
-    description: "Business view (SQL query hidden)",
+    label: "Business User",
     icon: <LockIcon />,
   },
   {
     id: "public",
     label: "Analyst",
-    description: "Full technical view (show all)",
     icon: <GlobeIcon />,
   },
 ];
@@ -93,11 +90,6 @@ export function VisibilitySelector({
           >
             <div className="flex flex-col items-start gap-1">
               {visibility.label}
-              {visibility.description && (
-                <div className="text-muted-foreground text-xs">
-                  {visibility.description}
-                </div>
-              )}
             </div>
             <div className="text-foreground opacity-0 group-data-[active=true]/item:opacity-100 dark:text-foreground">
               <CheckCircleFillIcon />

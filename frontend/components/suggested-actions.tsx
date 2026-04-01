@@ -63,11 +63,6 @@ const STARTER_QUESTION_CATEGORIES: readonly StarterCategory[] = [
   },
 ];
 
-const DEFAULT_CATEGORY_BY_VISIBILITY: Record<VisibilityType, StarterCategory["id"]> = {
-  private: "nation",
-  public: "geography",
-};
-
 function PureSuggestedActions({
   chatId,
   sendMessage,
@@ -75,22 +70,25 @@ function PureSuggestedActions({
   onSuggestionSelected,
 }: SuggestedActionsProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<
-    StarterCategory["id"]
-  >(DEFAULT_CATEGORY_BY_VISIBILITY[selectedVisibilityType]);
+    StarterCategory["id"] | null
+  >(null);
 
   const selectedCategory = useMemo(
     () =>
+      !selectedCategoryId
+        ? null
+        :
       STARTER_QUESTION_CATEGORIES.find(
         (category) => category.id === selectedCategoryId
-      ) ?? STARTER_QUESTION_CATEGORIES[0],
+      ) ?? null,
     [selectedCategoryId]
   );
 
   useEffect(() => {
-    setSelectedCategoryId(DEFAULT_CATEGORY_BY_VISIBILITY[selectedVisibilityType]);
+    setSelectedCategoryId(null);
   }, [selectedVisibilityType]);
 
-  const categoryQuestions = selectedCategory.questions;
+  const categoryQuestions = selectedCategory?.questions ?? [];
 
   const sendStarterQuestion = (suggestion: string) => {
     onSuggestionSelected?.();
@@ -103,6 +101,10 @@ function PureSuggestedActions({
 
   return (
     <div className="w-full space-y-3" data-testid="suggested-actions">
+      <p className="text-muted-foreground text-sm">
+        Try asking questions related to...
+      </p>
+
       <div className="flex flex-wrap gap-2">
         {STARTER_QUESTION_CATEGORIES.map((category) => {
           const isActive = category.id === selectedCategoryId;
@@ -122,21 +124,23 @@ function PureSuggestedActions({
         })}
       </div>
 
-      <div className="grid w-full gap-2 sm:grid-cols-2">
-        {categoryQuestions.map((suggestedAction) => (
-          <div className="h-full" key={`${selectedCategory.id}-${suggestedAction}`}>
-            <Suggestion
-              className="h-full min-h-[76px] w-full items-start justify-start whitespace-normal rounded-2xl px-4 py-2.5 text-left"
-              onClick={sendStarterQuestion}
-              suggestion={suggestedAction}
-              title={suggestedAction}
-              variant="outline"
-            >
-              <div className="line-clamp-3 text-sm leading-relaxed">{suggestedAction}</div>
-            </Suggestion>
-          </div>
-        ))}
-      </div>
+      {!!selectedCategory && (
+        <div className="grid w-full gap-2 sm:grid-cols-2">
+          {categoryQuestions.map((suggestedAction) => (
+            <div className="h-full" key={`${selectedCategory.id}-${suggestedAction}`}>
+              <Suggestion
+                className="h-full min-h-[76px] w-full items-start justify-start whitespace-normal rounded-2xl px-4 py-2.5 text-left"
+                onClick={sendStarterQuestion}
+                suggestion={suggestedAction}
+                title={suggestedAction}
+                variant="outline"
+              >
+                <div className="line-clamp-3 text-sm leading-relaxed">{suggestedAction}</div>
+              </Suggestion>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
