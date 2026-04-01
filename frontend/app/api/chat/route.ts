@@ -221,6 +221,7 @@ export async function POST(req: Request) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, thread_id: threadId }),
+      signal: req.signal,
     });
 
     if (!backendResponse.ok) {
@@ -366,7 +367,7 @@ export async function POST(req: Request) {
           const fetchLatestAssistantParts = async (): Promise<HistoryMessagePart[]> => {
             const historyResponse = await fetch(
               `${BACKEND_API_BASE_URL}/api/v1/history/${encodeURIComponent(threadId)}`,
-              { cache: "no-store" }
+              { cache: "no-store", signal: req.signal }
             );
 
             if (!historyResponse.ok) {
@@ -704,6 +705,9 @@ export async function POST(req: Request) {
 
     return createUIMessageStreamResponse({ stream });
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return new Response(null, { status: 499 });
+    }
     const message = error instanceof Error ? error.message : "Unexpected chat error";
     return new ChatbotError("bad_request:chat", message).toResponse();
   }

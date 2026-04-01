@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
 import { BulkUploadSelector } from "@/components/bulk-upload-selector";
+import { DailyPulseSelector } from "@/components/daily-pulse-selector";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
@@ -25,7 +26,7 @@ import {
   PromptInputToolbar,
   PromptInputTools,
 } from "./elements/prompt-input";
-import { ArrowUpIcon, PulseIcon, StopIcon } from "./icons";
+import { ArrowUpIcon, StopIcon } from "./icons";
 import { PreviewAttachment } from "./preview-attachment";
 import { SuggestedActions } from "./suggested-actions";
 import { Button } from "./ui/button";
@@ -157,7 +158,6 @@ function PureMultimodalInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadQueue, setUploadQueue] = useState<string[]>([]);
   const [hasInteracted, setHasInteracted] = useState(messages.length > 0);
-  const [isDailyPulseLoading, setIsDailyPulseLoading] = useState(false);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -317,41 +317,6 @@ function PureMultimodalInput({
     return () => textarea.removeEventListener("paste", handlePaste);
   }, [handlePaste]);
 
-  const handleDailyPulseStart = useCallback(async () => {
-    if (isDailyPulseLoading) {
-      return;
-    }
-
-    setIsDailyPulseLoading(true);
-    try {
-      const response = await fetch("/api/daily-pulse", { cache: "no-store" });
-      if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(detail || "Failed to load Daily Pulse questions");
-      }
-
-      const payload = (await response.json()) as { questions?: string[] };
-      const questions = Array.isArray(payload.questions)
-        ? payload.questions.filter(
-            (item): item is string => typeof item === "string" && item.trim().length > 0
-          )
-        : [];
-
-      if (questions.length === 0) {
-        toast.error("No questions found in Daily Pulse source");
-        return;
-      }
-
-      onBulkUploadStart?.(questions);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to start Daily Pulse"
-      );
-    } finally {
-      setIsDailyPulseLoading(false);
-    }
-  }, [isDailyPulseLoading, onBulkUploadStart]);
-
   return (
     <div className={cn("relative flex w-full flex-col gap-4", className)}>
       <input
@@ -435,20 +400,11 @@ function PureMultimodalInput({
                 onBulkUploadStart?.(config.questions);
               }}
             />
-            <Button
-              className="h-8 max-w-[12rem] justify-start gap-2 rounded-lg px-2 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-              disabled={isDailyPulseLoading}
-              onClick={() => {
-                void handleDailyPulseStart();
+            <DailyPulseSelector
+              onConfigured={(questions) => {
+                onBulkUploadStart?.(questions);
               }}
-              type="button"
-              variant="ghost"
-            >
-              <PulseIcon size={14} />
-              <span className="truncate">
-                {isDailyPulseLoading ? "Loading Daily Pulse..." : "Daily Pulse"}
-              </span>
-            </Button>
+            />
           </PromptInputTools>
 
           {status === "submitted" || status === "streaming" ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { UploadIcon } from "@/components/icons";
@@ -28,6 +29,11 @@ type BulkUploadConfig = {
   questions: string[];
   mapping: ColumnMapping;
 };
+
+const EXCEL_MIME_TYPES = new Set([
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+]);
 
 function findHeaderByKeywords(headers: string[], keywords: string[]) {
   const normalized = headers.map((header) => ({
@@ -97,37 +103,86 @@ export function BulkUploadSelector({
     setIsParsing(true);
 
     try {
-      const csvText = await file.text();
-      const parsed = Papa.parse<Record<string, string>>(csvText, {
-        header: true,
-        skipEmptyLines: "greedy",
-        transformHeader: (header) => header.trim(),
-      });
+      const fileExtension = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const isExcelFile = fileExtension === "xlsx" || EXCEL_MIME_TYPES.has(file.type);
 
-      if (parsed.errors.length > 0) {
-        const firstError = parsed.errors[0]?.message || "Unable to parse CSV file";
-        toast.error(firstError);
-        return;
+      let detectedHeaders: string[] = [];
+      let normalizedRows: Record<string, string>[] = [];
+
+      if (isExcelFile) {
+        const fileBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(fileBuffer, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+
+        if (!firstSheetName) {
+          toast.error("No sheets found in this Excel file");
+          return;
+        }
+
+        const firstSheet = workbook.Sheets[firstSheetName];
+        const sheetMatrix = XLSX.utils.sheet_to_json(firstSheet, {
+          header: 1,
+          blankrows: false,
+          raw: false,
+        }) as Array<Array<string | number | boolean | null | undefined>>;
+
+        if (sheetMatrix.length === 0) {
+          toast.error("No columns found in this Excel file");
+          return;
+        }
+
+        detectedHeaders = (sheetMatrix[0] ?? [])
+          .map((cell: string | number | boolean | null | undefined) => String(cell ?? "").trim())
+          .filter((header: string) => header.length > 0);
+
+        if (detectedHeaders.length === 0) {
+          toast.error("No columns found in this Excel file");
+          return;
+        }
+
+        normalizedRows = sheetMatrix
+          .slice(1)
+          .map((row: Array<string | number | boolean | null | undefined>) => {
+            const result: Record<string, string> = {};
+            for (const [index, header] of detectedHeaders.entries()) {
+              result[header] = String(row[index] ?? "").trim();
+            }
+            return result;
+          })
+          .filter((row: Record<string, string>) => detectedHeaders.some((header) => row[header]));
+      } else {
+        const csvText = await file.text();
+        const parsed = Papa.parse<Record<string, string>>(csvText, {
+          header: true,
+          skipEmptyLines: "greedy",
+          transformHeader: (header) => header.trim(),
+        });
+
+        if (parsed.errors.length > 0) {
+          const firstError = parsed.errors[0]?.message || "Unable to parse CSV file";
+          toast.error(firstError);
+          return;
+        }
+
+        detectedHeaders = (parsed.meta.fields ?? [])
+          .map((header) => header.trim())
+          .filter(Boolean);
+
+        if (detectedHeaders.length === 0) {
+          toast.error("No columns found in this CSV file");
+          return;
+        }
+
+        normalizedRows = parsed.data
+          .map((row) => {
+            const result: Record<string, string> = {};
+            for (const header of detectedHeaders) {
+              result[header] = String(row[header] ?? "").trim();
+            }
+            return result;
+          })
+          .filter((row) => detectedHeaders.some((header) => row[header]));
       }
-
-      const detectedHeaders = (parsed.meta.fields ?? [])
-        .map((header) => header.trim())
-        .filter(Boolean);
-
-      if (detectedHeaders.length === 0) {
-        toast.error("No columns found in this CSV file");
-        return;
-      }
-
-      const normalizedRows = parsed.data
-        .map((row) => {
-          const result: Record<string, string> = {};
-          for (const header of detectedHeaders) {
-            result[header] = String(row[header] ?? "").trim();
-          }
-          return result;
-        })
-        .filter((row) => detectedHeaders.some((header) => row[header]));
 
       setFileName(file.name);
       setHeaders(detectedHeaders);
@@ -136,7 +191,7 @@ export function BulkUploadSelector({
       setRowCount(normalizedRows.length);
       setMapping(suggestInitialMapping(detectedHeaders));
     } catch (_error) {
-      toast.error("Failed to read the selected file");
+      toast.error("Failed to read the selected file. Please use a valid CSV or XLSX file.");
     } finally {
       setIsParsing(false);
       if (fileInputRef.current) {
@@ -189,13 +244,13 @@ export function BulkUploadSelector({
         <DialogHeader className="border-b px-6 pt-6 pb-4">
           <DialogTitle>Bulk Question Upload</DialogTitle>
           <DialogDescription>
-            Upload a CSV, select one column to run, and start batch execution.
+            Upload a CSV or XLSX, select one column to run, and start batch execution.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto px-6 py-4">
           <input
-            accept=".csv,text/csv"
+            accept=".csv,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -216,7 +271,7 @@ export function BulkUploadSelector({
               >
                 <UploadIcon size={20} />
                 <div>
-                  <p className="font-medium">Choose CSV file</p>
+                  <p className="font-medium">Choose CSV or XLSX file</p>
                   <p className="text-sm text-muted-foreground">
                     Click to browse. First row should contain column names.
                   </p>
