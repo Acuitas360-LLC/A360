@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChartErrorBoundary } from "@/components/chart-error-boundary";
@@ -57,18 +57,20 @@ export function SQLTransparencyPanel({
 }: SQLTransparencyPanelProps) {
   const [showAllRows, setShowAllRows] = useState(false);
   const isMarketingHead = selectedVisibilityType === "private";
+  const tableColumns = columns ?? [];
+  const tableRows = queryRows ?? [];
 
   const visibleRows = useMemo(() => {
-    if (!queryRows?.length) {
+    if (!tableRows.length) {
       return [];
     }
 
     if (showAllRows) {
-      return queryRows;
+      return tableRows;
     }
 
-    return queryRows.slice(0, 20);
-  }, [queryRows, showAllRows]);
+    return tableRows.slice(0, 20);
+  }, [tableRows, showAllRows]);
 
   const normalizedProgressStages = useMemo(() => {
     if (!progressStages?.length) {
@@ -101,20 +103,175 @@ export function SQLTransparencyPanel({
   }, [progressStages]);
 
   const hasSummaryVisible = Boolean(resultSummary?.trim());
-  const hasTableReady = Boolean(queryRows?.length) && Boolean(columns?.length);
-  const hasActiveProgressStage = normalizedProgressStages.some(
-    (stage) => stage.state === "active"
+  const hasTableReady = Boolean(tableRows.length) && Boolean(tableColumns.length);
+  const isSummaryStageCompleted = normalizedProgressStages.some(
+    (stage) => stage.key === "rendering_summary" && stage.state === "completed"
   );
   const isPreparingResultTable = normalizedProgressStages.some(
     (stage) => stage.state === "active" && stage.key === "preparing_result_table"
   );
-  const shouldShowTablePlaceholder =
-    hasSummaryVisible && !hasTableReady && isPreparingResultTable;
-  const shouldShowVisualizationPlaceholder =
-    hasSummaryVisible && !visualizationFigure && hasActiveProgressStage;
+  const isResultTableStageCompleted = normalizedProgressStages.some(
+    (stage) => stage.key === "preparing_result_table" && stage.state === "completed"
+  );
+  const isGeneratingVisualization = normalizedProgressStages.some(
+    (stage) => stage.key === "generating_visualization" && stage.state === "active"
+  );
+  const [showTableContent, setShowTableContent] = useState(hasTableReady);
+  const [showVisualizationContent, setShowVisualizationContent] = useState(
+    Boolean(visualizationFigure)
+  );
+  const [tablePhaseStartedAt, setTablePhaseStartedAt] = useState<number | null>(null);
+  const [visualizationPhaseStartedAt, setVisualizationPhaseStartedAt] = useState<number | null>(
+    null
+  );
+  const TABLE_REVEAL_DELAY_MS = 60;
+  const CHART_REVEAL_DELAY_MS = 140;
+  const PLACEHOLDER_EXIT_MS = 220;
+  const MIN_TABLE_GENERATION_FEEL_MS = 280;
+  const MIN_CHART_GENERATION_FEEL_MS = 340;
+  const isSummaryPhaseComplete = hasSummaryVisible || isSummaryStageCompleted;
+  const canStartTablePhase = isSummaryPhaseComplete;
+  const shouldShowTableContent =
+    canStartTablePhase && hasTableReady && showTableContent;
+  const canStartVisualizationPhase =
+    isSummaryPhaseComplete &&
+    (shouldShowTableContent || (!hasTableReady && isResultTableStageCompleted));
+  const shouldShowVisualizationContent =
+    canStartVisualizationPhase &&
+    Boolean(visualizationFigure) &&
+    showVisualizationContent;
+
+  useEffect(() => {
+    if (!canStartTablePhase || tablePhaseStartedAt !== null) {
+      return;
+    }
+
+    setTablePhaseStartedAt(Date.now());
+  }, [canStartTablePhase, tablePhaseStartedAt]);
+
+  useEffect(() => {
+    if (!canStartTablePhase || !hasTableReady || showTableContent) {
+      return;
+    }
+
+    const elapsed = tablePhaseStartedAt ? Date.now() - tablePhaseStartedAt : 0;
+    const remainingGenerationFeel = Math.max(0, MIN_TABLE_GENERATION_FEEL_MS - elapsed);
+    const revealDelay = Math.max(TABLE_REVEAL_DELAY_MS, remainingGenerationFeel);
+
+    const timer = window.setTimeout(() => {
+      setShowTableContent(true);
+    }, revealDelay);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    canStartTablePhase,
+    hasTableReady,
+    showTableContent,
+    tablePhaseStartedAt,
+  ]);
+
+  useEffect(() => {
+    if (!canStartVisualizationPhase || visualizationPhaseStartedAt !== null) {
+      return;
+    }
+
+    setVisualizationPhaseStartedAt(Date.now());
+  }, [canStartVisualizationPhase, visualizationPhaseStartedAt]);
+
+  useEffect(() => {
+    if (!canStartVisualizationPhase || !visualizationFigure || showVisualizationContent) {
+      return;
+    }
+
+    const elapsed = visualizationPhaseStartedAt
+      ? Date.now() - visualizationPhaseStartedAt
+      : 0;
+    const remainingGenerationFeel = Math.max(
+      0,
+      MIN_CHART_GENERATION_FEEL_MS - elapsed
+    );
+    const revealDelay = Math.max(CHART_REVEAL_DELAY_MS, remainingGenerationFeel);
+
+    const timer = window.setTimeout(() => {
+      setShowVisualizationContent(true);
+    }, revealDelay);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    canStartVisualizationPhase,
+    visualizationFigure,
+    showVisualizationContent,
+    visualizationPhaseStartedAt,
+  ]);
+
+  const shouldShowTablePlaceholderNow =
+    canStartTablePhase &&
+    !shouldShowTableContent &&
+    (isPreparingResultTable || hasTableReady);
+  const shouldShowVisualizationPlaceholderNow =
+    canStartVisualizationPhase &&
+    !shouldShowVisualizationContent &&
+    (isGeneratingVisualization || Boolean(visualizationFigure));
+  const [renderTablePlaceholder, setRenderTablePlaceholder] = useState(
+    shouldShowTablePlaceholderNow
+  );
+  const [renderVisualizationPlaceholder, setRenderVisualizationPlaceholder] =
+    useState(shouldShowVisualizationPlaceholderNow);
+  const [isTablePlaceholderExiting, setIsTablePlaceholderExiting] =
+    useState(false);
+  const [isVisualizationPlaceholderExiting, setIsVisualizationPlaceholderExiting] =
+    useState(false);
+
+  useEffect(() => {
+    if (shouldShowTablePlaceholderNow) {
+      setRenderTablePlaceholder(true);
+      setIsTablePlaceholderExiting(false);
+      return;
+    }
+
+    if (!renderTablePlaceholder) {
+      return;
+    }
+
+    setIsTablePlaceholderExiting(true);
+    const timer = window.setTimeout(() => {
+      setRenderTablePlaceholder(false);
+      setIsTablePlaceholderExiting(false);
+    }, PLACEHOLDER_EXIT_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [shouldShowTablePlaceholderNow, renderTablePlaceholder]);
+
+  useEffect(() => {
+    if (shouldShowVisualizationPlaceholderNow) {
+      setRenderVisualizationPlaceholder(true);
+      setIsVisualizationPlaceholderExiting(false);
+      return;
+    }
+
+    if (!renderVisualizationPlaceholder) {
+      return;
+    }
+
+    setIsVisualizationPlaceholderExiting(true);
+    const timer = window.setTimeout(() => {
+      setRenderVisualizationPlaceholder(false);
+      setIsVisualizationPlaceholderExiting(false);
+    }, PLACEHOLDER_EXIT_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [shouldShowVisualizationPlaceholderNow, renderVisualizationPlaceholder]);
 
   const downloadCsv = () => {
-    if (!columns?.length || !queryRows?.length) {
+    if (!tableColumns.length || !tableRows.length) {
       return;
     }
 
@@ -130,9 +287,9 @@ export function SQLTransparencyPanel({
       return stringValue;
     };
 
-    const headerRow = columns.map(escapeValue).join(",");
-    const dataRows = queryRows.map((row) =>
-      columns.map((column) => escapeValue(row[column])).join(",")
+    const headerRow = tableColumns.map(escapeValue).join(",");
+    const dataRows = tableRows.map((row) =>
+      tableColumns.map((column) => escapeValue(row[column])).join(",")
     );
     const csvContent = [headerRow, ...dataRows].join("\n");
 
@@ -146,7 +303,7 @@ export function SQLTransparencyPanel({
   };
 
   const hasContent =
-    Boolean(hasSummaryVisible && normalizedProgressStages.length) ||
+    Boolean(normalizedProgressStages.length) ||
     Boolean(sqlQuery) ||
     Boolean(resultSummary) ||
     Boolean(columns?.length) ||
@@ -182,23 +339,23 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
-      {(columns?.length || typeof rowCount === "number") && (
+      {(tableColumns.length || typeof rowCount === "number") && (
         <div className="response-section mb-2 flex flex-wrap gap-2 text-xs">
           {typeof rowCount === "number" && (
             <span className="rounded-full border border-border/70 bg-muted/25 px-2.5 py-1 font-medium text-[11px] tracking-wide">
               Rows: {rowCount}
             </span>
           )}
-          {!!columns?.length && (
+          {!!tableColumns.length && (
             <span className="rounded-full border border-border/70 bg-muted/25 px-2.5 py-1 font-medium text-[11px] tracking-wide">
-              Columns: {columns.length}
+              Columns: {tableColumns.length}
             </span>
           )}
         </div>
       )}
 
-      {!!queryRows?.length && !!columns?.length && (
-        <div className="response-section mb-3">
+      {shouldShowTableContent && (
+        <div className="response-section response-reveal response-reveal-delay-sm is-visible mb-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Query Results</p>
             <div className="flex items-center gap-2">
@@ -224,7 +381,7 @@ export function SQLTransparencyPanel({
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 bg-muted">
                 <tr>
-                  {columns.map((column) => (
+                  {tableColumns.map((column) => (
                     <th
                       className="border-border/70 border-b px-3 py-2.5 font-semibold text-[11px] text-foreground/85 uppercase tracking-wide"
                       key={column}
@@ -240,7 +397,7 @@ export function SQLTransparencyPanel({
                     className="odd:bg-background even:bg-muted/20 transition-colors hover:bg-muted/35 hover:[&_td]:font-medium"
                     key={`sql-row-${rowIndex}`}
                   >
-                    {columns.map((column) => (
+                    {tableColumns.map((column) => (
                       <td className="max-w-[280px] truncate px-3 py-2" key={`${rowIndex}-${column}`}>
                         {String(row[column] ?? "") || "-"}
                       </td>
@@ -250,16 +407,20 @@ export function SQLTransparencyPanel({
               </tbody>
             </table>
           </div>
-          {queryRows.length > 20 && !showAllRows && (
+          {tableRows.length > 20 && !showAllRows && (
             <p className="mt-1 text-muted-foreground text-xs">
-              Showing first 20 rows of {queryRows.length}.
+              Showing first 20 rows of {tableRows.length}.
             </p>
           )}
         </div>
       )}
 
-      {shouldShowTablePlaceholder && (
-        <div className="response-section mb-3">
+      {renderTablePlaceholder && (
+        <div
+          className={`response-section response-reveal-placeholder mb-3${
+            isTablePlaceholderExiting ? " is-exiting" : ""
+          }`}
+        >
           <div className="mb-2 flex items-center gap-2">
             <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
               Query Results
@@ -287,8 +448,8 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
-      {visualizationFigure && (
-        <div className="response-section mb-3">
+      {shouldShowVisualizationContent && visualizationFigure && (
+        <div className="response-section response-reveal response-reveal-delay-md is-visible mb-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
               <p className="font-semibold text-sm tracking-tight">Data Visualization</p>
@@ -300,9 +461,11 @@ export function SQLTransparencyPanel({
               </Badge>
             )}
           </div>
-          <ChartErrorBoundary>
-            <PlotlyFigureChart figure={visualizationFigure} mode="normalized" />
-          </ChartErrorBoundary>
+          <div className="min-h-[280px]">
+            <ChartErrorBoundary>
+              <PlotlyFigureChart figure={visualizationFigure} mode="normalized" />
+            </ChartErrorBoundary>
+          </div>
           {visualizationMeta && (
             <div className="response-evidence mt-2 p-2 text-xs">
               <p className="font-medium text-[11px] uppercase tracking-wide">Data Fidelity</p>
@@ -319,8 +482,12 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
-      {shouldShowVisualizationPlaceholder && (
-        <div className="response-section mb-3">
+      {renderVisualizationPlaceholder && (
+        <div
+          className={`response-section response-reveal-placeholder mb-3${
+            isVisualizationPlaceholderExiting ? " is-exiting" : ""
+          }`}
+        >
           <div className="mb-2 flex items-center gap-2">
             <p className="font-semibold text-sm tracking-tight">Data Visualization</p>
             <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
@@ -338,7 +505,7 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
-      {!!visualizationCode && !visualizationFigure && !shouldShowVisualizationPlaceholder && (
+      {!!visualizationCode && !visualizationFigure && !renderVisualizationPlaceholder && (
         <div className="response-section mb-3 rounded-md border border-amber-300/60 bg-amber-50/40 p-2 text-xs text-amber-900">
           Deterministic Plotly chart is unavailable for this response. Summary and table remain available.
         </div>

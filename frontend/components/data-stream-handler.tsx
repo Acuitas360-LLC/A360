@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
@@ -16,6 +17,10 @@ export function DataStreamHandler() {
   const STREAM_DELTA_PROCESS_MS = 40;
   const dataStream = useStreamingStore((state) => state.dataStream);
   const drainDataStream = useStreamingStore((state) => state.drainDataStream);
+  const pathname = usePathname();
+  const currentChatId = pathname?.startsWith("/chat/")
+    ? pathname.split("/")[2] ?? null
+    : null;
   const { mutate } = useSWRConfig();
 
   const { artifact, setArtifact, setMetadata } = useArtifact();
@@ -107,11 +112,11 @@ export function DataStreamHandler() {
   }, []);
 
   useEffect(() => {
-    if (!dataStream?.length) {
+    if (!currentChatId || !dataStream?.length) {
       return;
     }
 
-    const drained = drainDataStream();
+    const drained = drainDataStream(currentChatId);
     if (!drained.length) {
       return;
     }
@@ -126,7 +131,7 @@ export function DataStreamHandler() {
       processPendingDeltas();
     }, STREAM_DELTA_PROCESS_MS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataStream]);
+  }, [currentChatId, dataStream, drainDataStream]);
 
   useEffect(() => {
     return () => {

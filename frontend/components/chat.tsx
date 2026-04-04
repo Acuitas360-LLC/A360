@@ -36,6 +36,15 @@ const ANALYTICS_RESPONSE_MARKER = "[[ANALYTICS_52_WEEKS_RESPONSE]]";
 const ERROR_RESPONSE_MARKER = "[[ERROR_RESPONSE]]";
 const ANALYTICS_RESPONSE_DELAY_MS = 1200;
 
+function isAbortLikeError(error: Error): boolean {
+  const normalizedMessage = error.message.toLowerCase();
+  return (
+    error.name === "AbortError" ||
+    normalizedMessage.includes("abort") ||
+    normalizedMessage.includes("cancel")
+  );
+}
+
 export function Chat({
   id,
   initialMessages,
@@ -61,9 +70,9 @@ export function Chat({
   const flushQueuedDataParts = useStreamingStore(
     (state) => state.flushQueuedDataParts
   );
-  const resetStreamState = useStreamingStore((state) => state.resetStreamState);
   const beginRun = useStreamingStore((state) => state.beginRun);
   const endRun = useStreamingStore((state) => state.endRun);
+  const setCurrentChatId = useStreamingStore((state) => state.setCurrentChatId);
 
   const [input, setInput] = useState<string>("");
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
@@ -90,6 +99,8 @@ export function Chat({
     { text: string } | null
   >(null);
   const currentModelIdRef = useRef(currentModelId);
+  const activeRunChatIdRef = useRef(id);
+  const activeRunIdRef = useRef<string | null>(null);
   const analyticsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -152,23 +163,37 @@ export function Chat({
       },
     }),
     onData: (dataPart) => {
-      enqueueDataPart(dataPart);
+      enqueueDataPart(dataPart, activeRunChatIdRef.current);
     },
     onFinish: () => {
       flushQueuedDataParts();
-      endRun();
+      const runChatId = activeRunChatIdRef.current;
+      const runId = activeRunIdRef.current;
+      endRun(runChatId, runId ?? undefined);
+      activeRunIdRef.current = null;
       if (typeof window !== "undefined") {
-        window.sessionStorage.removeItem(`chat:${id}:pendingResume`);
-        window.sessionStorage.removeItem(`chat:${id}:lastRequestFailed`);
+        window.sessionStorage.removeItem(`chat:${runChatId}:pendingResume`);
+        window.sessionStorage.removeItem(`chat:${runChatId}:lastRequestFailed`);
       }
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
       flushQueuedDataParts();
-      endRun();
+      const runChatId = activeRunChatIdRef.current;
+      const runId = activeRunIdRef.current;
+      endRun(runChatId, runId ?? undefined);
+      activeRunIdRef.current = null;
+
+      if (isAbortLikeError(error)) {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.removeItem(`chat:${runChatId}:pendingResume`);
+        }
+        return;
+      }
+
       if (typeof window !== "undefined") {
-        window.sessionStorage.removeItem(`chat:${id}:pendingResume`);
-        window.sessionStorage.setItem(`chat:${id}:lastRequestFailed`, "1");
+        window.sessionStorage.removeItem(`chat:${runChatId}:pendingResume`);
+        window.sessionStorage.setItem(`chat:${runChatId}:lastRequestFailed`, "1");
       }
 
       const hasUsableAssistantResponseForCurrentTurn = (() => {
@@ -320,6 +345,10 @@ export function Chat({
   });
 
   useEffect(() => {
+    setCurrentChatId(id);
+  }, [id, setCurrentChatId]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -384,10 +413,10 @@ export function Chat({
       // Ensure at most one active stream before dispatching a new prompt.
       stop();
 
-      // Start each turn from a clean transient stream state so follow-up
-      // prompts do not inherit stale buffered deltas from the previous turn.
-      resetStreamState();
-      beginRun(generateUUID());
+      const runId = generateUUID();
+      activeRunChatIdRef.current = id;
+      activeRunIdRef.current = runId;
+      beginRun(id, runId);
 
       const prompt = (message.parts ?? [])
         .filter((part) => part.type === "text")
@@ -427,7 +456,7 @@ export function Chat({
 
       return sendMessage(...args);
     },
-    [beginRun, resetStreamState, sendMessage, setMessages, stop]
+    [beginRun, id, sendMessage, setMessages, stop]
   );
 
   const handleRetryFailedResponse = useCallback(
@@ -611,14 +640,11 @@ export function Chat({
 
   useEffect(() => {
     return () => {
-      stop();
-      endRun();
-      resetStreamState();
       if (analyticsTimeoutRef.current) {
         clearTimeout(analyticsTimeoutRef.current);
       }
     };
-  }, [endRun, resetStreamState, stop]);
+  }, []);
 
   return (
     <>

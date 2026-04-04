@@ -148,6 +148,25 @@ const PurePreviewMessage = ({
         };
       }
     | undefined;
+  const progressStages = [...message.parts]
+    .reverse()
+    .find((part) => part.type === "data-progressStages") as
+    | {
+        type: "data-progressStages";
+        data: Array<{
+          key?: string;
+          label?: string;
+          state?: string;
+        }>;
+      }
+    | undefined;
+  const isSummaryStageCompleted = Boolean(
+    progressStages?.data?.some(
+      (stage) => stage.key === "rendering_summary" && stage.state === "completed"
+    )
+  );
+  const isSummaryPhaseCompleteForPanel =
+    Boolean(resultSummary?.data?.trim()) || isSummaryStageCompleted;
   const relevantQuestionsParts = message.parts.filter(
     (part) => part.type === "data-relevantQuestions"
   ) as Array<{ type: "data-relevantQuestions"; data: string[] }>;
@@ -547,11 +566,12 @@ const PurePreviewMessage = ({
           })}
 
           {message.role === "assistant" &&
-            !isLoading &&
             !hasInlineErrorText &&
+            isSummaryPhaseCompleteForPanel &&
             (hasAssistantNarrativeText || hasStructuredInsightData) && (
             <SQLTransparencyPanel
               columns={latestSqlColumns?.data || latestSqlResult?.data?.columns}
+              progressStages={progressStages?.data}
               queryRows={latestSqlResult?.data?.data}
               relevantQuestions={relevantQuestions?.data}
               resultSummary={resultSummary?.data}

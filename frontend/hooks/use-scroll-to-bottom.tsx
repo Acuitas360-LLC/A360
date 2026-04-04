@@ -11,6 +11,7 @@ export function useScrollToBottom({
   const isAtBottomRef = useRef(true);
   const isUserScrollingRef = useRef(false);
   const statusRef = useRef(status);
+  const resizeDebounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     statusRef.current = status;
@@ -98,7 +99,7 @@ export function useScrollToBottom({
       return;
     }
 
-    const scrollIfNeeded = () => {
+    const scrollIfNeeded = (source: "mutation" | "resize") => {
       if (statusRef.current === "submitted") {
         return;
       }
@@ -117,7 +118,10 @@ export function useScrollToBottom({
 
           container.scrollTo({
             top: targetTop,
-            behavior: statusRef.current === "streaming" ? "smooth" : "instant",
+            behavior:
+              source === "mutation" && statusRef.current === "streaming"
+                ? "smooth"
+                : "instant",
           });
           setIsAtBottom(true);
           isAtBottomRef.current = true;
@@ -125,8 +129,36 @@ export function useScrollToBottom({
       }
     };
 
+    const scheduleResizeScroll = () => {
+      if (resizeDebounceTimeoutRef.current) {
+        clearTimeout(resizeDebounceTimeoutRef.current);
+      }
+
+      // Charts and large tables can trigger a burst of resize events during mount.
+      // Settling briefly avoids repeated repositioning and visible viewport jumps.
+      resizeDebounceTimeoutRef.current = setTimeout(() => {
+        scrollIfNeeded("resize");
+      }, 180);
+    };
+
     // Watch for DOM changes
-    const mutationObserver = new MutationObserver(scrollIfNeeded);
+    const mutationObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof Element) {
+            resizeObserver.observe(node);
+          }
+        }
+
+        for (const node of mutation.removedNodes) {
+          if (node instanceof Element) {
+            resizeObserver.unobserve(node);
+          }
+        }
+      }
+
+      scrollIfNeeded("mutation");
+    });
     mutationObserver.observe(container, {
       childList: true,
       subtree: true,
@@ -134,7 +166,9 @@ export function useScrollToBottom({
     });
 
     // Watch for size changes
-    const resizeObserver = new ResizeObserver(scrollIfNeeded);
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleResizeScroll();
+    });
     resizeObserver.observe(container);
 
     // Also observe children for size changes
@@ -145,6 +179,10 @@ export function useScrollToBottom({
     return () => {
       mutationObserver.disconnect();
       resizeObserver.disconnect();
+      if (resizeDebounceTimeoutRef.current) {
+        clearTimeout(resizeDebounceTimeoutRef.current);
+        resizeDebounceTimeoutRef.current = null;
+      }
     };
   }, [getContentBottomTop]);
 

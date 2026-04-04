@@ -60,6 +60,7 @@ function PureMessages({
   });
 
   const anchoredSequenceRef = useRef(0);
+  const chartScrollSequenceRef = useRef(0);
   const lastAnchoredUserMessageIdRef = useRef<string | null>(null);
   const userMessageElementRefs = useRef(new Map<string, HTMLDivElement>());
 
@@ -213,6 +214,98 @@ function PureMessages({
             );
           });
         });
+
+  const hasChartForCurrentTurn =
+    typeof latestUserIndex === "number"
+      ? messages.slice(latestUserIndex + 1).some((message) => {
+          if (message.role !== "assistant") {
+            return false;
+          }
+
+          return message.parts.some((part) => {
+            if (part.type === "data-visualizationFigure") {
+              const figurePart = part as {
+                type: "data-visualizationFigure";
+                data?: { data?: unknown[] };
+              };
+
+              return Boolean(figurePart.data?.data?.length);
+            }
+
+            return false;
+          });
+        })
+      : false;
+
+  const hasSummaryForCurrentTurn =
+    typeof latestUserIndex === "number"
+      ? messages.slice(latestUserIndex + 1).some((message) => {
+          if (message.role !== "assistant") {
+            return false;
+          }
+
+          return message.parts.some((part) => part.type === "data-resultSummary");
+        })
+      : false;
+
+  const hasTableForCurrentTurn =
+    typeof latestUserIndex === "number"
+      ? messages.slice(latestUserIndex + 1).some((message) => {
+          if (message.role !== "assistant") {
+            return false;
+          }
+
+          return message.parts.some((part) => part.type === "data-sqlResult");
+        })
+      : false;
+
+  useEffect(() => {
+    if (submitSequence <= 0) {
+      return;
+    }
+
+    if (!hasChartForCurrentTurn || !hasSummaryForCurrentTurn || !hasTableForCurrentTurn) {
+      return;
+    }
+
+    if (chartScrollSequenceRef.current >= submitSequence) {
+      return;
+    }
+
+    const firstNudge = window.setTimeout(() => {
+      scrollToBottom("smooth");
+    }, 420);
+
+    // Plotly/chart containers can resize after initial mount.
+    // A second nudge keeps the chart in view after the final layout settles.
+    const secondNudge = window.setTimeout(() => {
+      scrollToBottom("smooth");
+    }, 980);
+
+    const followUntil = Date.now() + 1800;
+    const followInterval = window.setInterval(() => {
+      if (Date.now() > followUntil) {
+        window.clearInterval(followInterval);
+        return;
+      }
+
+      scrollToBottom("smooth");
+    }, 220);
+
+    chartScrollSequenceRef.current = submitSequence;
+
+    return () => {
+      window.clearTimeout(firstNudge);
+      window.clearTimeout(secondNudge);
+      window.clearInterval(followInterval);
+    };
+  }, [
+    hasChartForCurrentTurn,
+    hasSummaryForCurrentTurn,
+    hasTableForCurrentTurn,
+    scrollToBottom,
+    submitSequence,
+  ]);
 
   return (
     <div className="relative flex-1 bg-background">

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { memo } from "react";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import type { Chat } from "@/lib/db/schema";
+import { useStreamingStore } from "@/lib/streaming-store";
 import {
   CheckCircleFillIcon,
   GlobeIcon,
@@ -41,12 +42,22 @@ const PureChatItem = ({
     chatId: chat.id,
     initialVisibilityType: chat.visibility,
   });
+  const isChatRunning = useStreamingStore((state) =>
+    state.isChatRunning(chat.id)
+  );
 
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
         <Link href={`/chat/${chat.id}`} onClick={() => setOpenMobile(false)}>
-          <span>{chat.title}</span>
+          <div className="flex w-full min-w-0 items-center gap-2">
+            <span className="truncate">{chat.title}</span>
+            {isChatRunning ? (
+              <span className="ml-auto shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                Generating...
+              </span>
+            ) : null}
+          </div>
         </Link>
       </SidebarMenuButton>
 
