@@ -1,4 +1,5 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import { ArrowDownIcon } from "lucide-react";
 import { useMessages } from "@/hooks/use-messages";
@@ -12,6 +13,7 @@ type MessagesProps = {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   chatId: string;
   status: UseChatHelpers<ChatMessage>["status"];
+  submitSequence: number;
   votes: Vote[] | undefined;
   messages: ChatMessage[];
   setMessages: UseChatHelpers<ChatMessage>["setMessages"];
@@ -33,6 +35,7 @@ function PureMessages({
   addToolApprovalResponse,
   chatId,
   status,
+  submitSequence,
   votes,
   messages,
   setMessages,
@@ -49,16 +52,116 @@ function PureMessages({
     containerRef: messagesContainerRef,
     endRef: messagesEndRef,
     isAtBottom,
+    onViewportLeave,
     scrollToBottom,
     hasSentMessage,
   } = useMessages({
     status,
   });
 
+  const anchoredSequenceRef = useRef(0);
+  const lastAnchoredUserMessageIdRef = useRef<string | null>(null);
+  const userMessageElementRefs = useRef(new Map<string, HTMLDivElement>());
+
+  const latestUserMessageId = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "user")?.id,
+    [messages]
+  );
+
   const latestUserIndex = [...messages]
     .map((message, index) => ({ message, index }))
     .reverse()
     .find(({ message }) => message.role === "user")?.index;
+
+  const hasAssistantStartedForCurrentTurn =
+    typeof latestUserIndex === "number"
+      ? messages
+          .slice(latestUserIndex + 1)
+          .some((message) => message.role === "assistant")
+      : false;
+
+  useEffect(() => {
+    if (submitSequence <= anchoredSequenceRef.current) {
+      return;
+    }
+
+    // If assistant content has already started for this turn, do not anchor late.
+    if (hasAssistantStartedForCurrentTurn) {
+      anchoredSequenceRef.current = submitSequence;
+      return;
+    }
+
+    if (!latestUserMessageId) {
+      return;
+    }
+
+    // Submit can fire before the new user message is appended. In that case,
+    // wait for a different latest user message id instead of anchoring the old one.
+    if (latestUserMessageId === lastAnchoredUserMessageIdRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    const anchorLatestUserMessage = () => {
+      if (cancelled) {
+        return;
+      }
+
+      const container = messagesContainerRef.current;
+      const messageNode = userMessageElementRefs.current.get(latestUserMessageId);
+
+      if (!container || !messageNode) {
+        attempts += 1;
+        if (attempts <= maxAttempts) {
+          requestAnimationFrame(anchorLatestUserMessage);
+        }
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const messageRect = messageNode.getBoundingClientRect();
+      const messageTopWithinContainer =
+        messageRect.top - containerRect.top + container.scrollTop;
+      const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+      const topOffset = isDesktop ? 24 : 16;
+      const messageTopInViewport = messageRect.top - containerRect.top;
+      const isAlreadyNearTarget =
+        messageTopInViewport >= topOffset - 16 &&
+        messageTopInViewport <= topOffset + 24;
+
+      if (isAlreadyNearTarget) {
+        lastAnchoredUserMessageIdRef.current = latestUserMessageId;
+        anchoredSequenceRef.current = submitSequence;
+        return;
+      }
+
+      const targetTop = Math.max(0, messageTopWithinContainer - topOffset);
+      const maxScrollableTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      const boundedTargetTop = Math.min(targetTop, maxScrollableTop);
+
+      // Anchor once, bounded by the current bottom limit. Do not re-anchor later
+      // as assistant content grows, otherwise the viewport can jump unexpectedly.
+      container.scrollTo({ top: boundedTargetTop, behavior: "instant" });
+      onViewportLeave();
+      lastAnchoredUserMessageIdRef.current = latestUserMessageId;
+      anchoredSequenceRef.current = submitSequence;
+    };
+
+    requestAnimationFrame(anchorLatestUserMessage);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hasAssistantStartedForCurrentTurn,
+    latestUserMessageId,
+    messagesContainerRef,
+    onViewportLeave,
+    submitSequence,
+  ]);
 
   const hasVisibleAssistantMessageForCurrentTurn =
     typeof latestUserIndex === "number"
@@ -121,7 +224,7 @@ function PureMessages({
           {messages.length === 0 && (
             <>
               <Greeting />
-              {initialInputSlot}
+              <div>{initialInputSlot}</div>
             </>
           )}
 
@@ -148,6 +251,18 @@ function PureMessages({
                   .trim() || ""
               }
               regenerate={regenerate}
+              rootRef={
+                message.role === "user"
+                  ? (element) => {
+                      if (!element) {
+                        userMessageElementRefs.current.delete(message.id);
+                        return;
+                      }
+
+                      userMessageElementRefs.current.set(message.id, element);
+                    }
+                  : undefined
+              }
               requiresScrollPadding={
                 hasSentMessage && index === messages.length - 1
               }
@@ -173,6 +288,10 @@ function PureMessages({
             className="min-h-[24px] min-w-[24px] shrink-0"
             ref={messagesEndRef}
           />
+
+          {messages.length > 0 && (
+            <div aria-hidden="true" className="h-[45vh] w-full shrink-0" />
+          )}
         </div>
       </div>
 

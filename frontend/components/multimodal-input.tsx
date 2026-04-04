@@ -49,6 +49,7 @@ function PureMultimodalInput({
   selectedModelId: _selectedModelId,
   onModelChange,
   onBulkUploadStart,
+  onSubmitTriggered,
 }: {
   chatId: string;
   input: string;
@@ -66,6 +67,7 @@ function PureMultimodalInput({
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
   onBulkUploadStart?: (questions: string[]) => void;
+  onSubmitTriggered?: () => void;
 }) {
   const DEFAULT_TEXTAREA_HEIGHT = 44;
   const MAX_TEXTAREA_HEIGHT = 200;
@@ -168,6 +170,7 @@ function PureMultimodalInput({
   const submitForm = useCallback(() => {
     window.history.pushState({}, "", `/chat/${chatId}`);
     setHasInteracted(true);
+    onSubmitTriggered?.();
 
     sendMessage({
       role: "user",
@@ -202,6 +205,7 @@ function PureMultimodalInput({
     setLocalStorageInput,
     width,
     chatId,
+    onSubmitTriggered,
     resetHeight,
   ]);
 

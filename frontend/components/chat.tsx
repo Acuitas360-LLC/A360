@@ -68,11 +68,15 @@ export function Chat({
   const [input, setInput] = useState<string>("");
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
+  const [submitSequence, setSubmitSequence] = useState(0);
   const [bulkQueue, setBulkQueue] = useState<{
     active: boolean;
     questions: string[];
     index: number;
   }>({ active: false, questions: [], index: 0 });
+  const handleSubmitTriggered = useCallback(() => {
+    setSubmitSequence((current) => current + 1);
+  }, []);
   const bulkDispatchInFlightRef = useRef(false);
   const previousStatusRef = useRef("ready");
   const bulkQueueRef = useRef<{ questions: string[]; index: number }>({
@@ -531,6 +535,7 @@ export function Chat({
       }
 
       bulkDispatchInFlightRef.current = true;
+      handleSubmitTriggered();
       sendMessageWithDemo({
         role: "user",
         parts: [{ type: "text", text: currentQuestion }],
@@ -545,7 +550,7 @@ export function Chat({
     bulkDispatchInFlightRef.current = false;
     bulkQueueRef.current = { questions: [], index: 0 };
     setBulkQueue({ active: false, questions: [], index: 0 });
-  }, [bulkQueue.active, sendMessageWithDemo, status]);
+  }, [bulkQueue.active, handleSubmitTriggered, sendMessageWithDemo, status]);
 
   const handleBulkUploadStart = useCallback((questions: string[]) => {
     const normalizedQuestions = questions
@@ -627,6 +632,7 @@ export function Chat({
         <Messages
           addToolApprovalResponse={addToolApprovalResponse}
           chatId={id}
+          submitSequence={submitSequence}
           initialInputSlot={
             isInitialHomeState && !isReadonly ? (
               <div className="mx-auto mt-5 w-full max-w-5xl px-2 md:mt-6 md:px-4">
@@ -637,6 +643,7 @@ export function Chat({
                   messages={messages}
                   onBulkUploadStart={handleBulkUploadStart}
                   onModelChange={setCurrentModelId}
+                  onSubmitTriggered={handleSubmitTriggered}
                   prominent={true}
                   selectedModelId={currentModelId}
                   selectedVisibilityType={visibilityType}
@@ -673,6 +680,7 @@ export function Chat({
               messages={messages}
               onBulkUploadStart={handleBulkUploadStart}
               onModelChange={setCurrentModelId}
+              onSubmitTriggered={handleSubmitTriggered}
               selectedModelId={currentModelId}
               selectedVisibilityType={visibilityType}
               sendMessage={sendMessageWithDemo}

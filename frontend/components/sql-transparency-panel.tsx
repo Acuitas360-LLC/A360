@@ -100,6 +100,19 @@ export function SQLTransparencyPanel({
       .filter((stage): stage is { key: string; label: string; state: string } => Boolean(stage));
   }, [progressStages]);
 
+  const hasSummaryVisible = Boolean(resultSummary?.trim());
+  const hasTableReady = Boolean(queryRows?.length) && Boolean(columns?.length);
+  const hasActiveProgressStage = normalizedProgressStages.some(
+    (stage) => stage.state === "active"
+  );
+  const isPreparingResultTable = normalizedProgressStages.some(
+    (stage) => stage.state === "active" && stage.key === "preparing_result_table"
+  );
+  const shouldShowTablePlaceholder =
+    hasSummaryVisible && !hasTableReady && isPreparingResultTable;
+  const shouldShowVisualizationPlaceholder =
+    hasSummaryVisible && !visualizationFigure && hasActiveProgressStage;
+
   const downloadCsv = () => {
     if (!columns?.length || !queryRows?.length) {
       return;
@@ -133,7 +146,7 @@ export function SQLTransparencyPanel({
   };
 
   const hasContent =
-    Boolean(normalizedProgressStages.length) ||
+    Boolean(hasSummaryVisible && normalizedProgressStages.length) ||
     Boolean(sqlQuery) ||
     Boolean(resultSummary) ||
     Boolean(columns?.length) ||
@@ -152,32 +165,6 @@ export function SQLTransparencyPanel({
       <div className="mb-3 flex items-center justify-between">
         <h4 className="font-semibold text-base tracking-tight">Analysis Details</h4>
       </div>
-
-      {!!normalizedProgressStages.length && (
-        <div className="response-evidence response-section mb-3 p-3">
-          <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Live Progress</p>
-          <div className="flex flex-wrap gap-2">
-            {normalizedProgressStages.map((stage) => {
-              const isCompleted = stage.state === "completed";
-              const isFailed = stage.state === "failed";
-              const stateClass = isFailed
-                ? "border-red-300 bg-red-50 text-red-700"
-                : isCompleted
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                  : "border-blue-300 bg-blue-50 text-blue-700";
-
-              return (
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-xs ${stateClass}`}
-                  key={`progress-stage-${stage.key}`}
-                >
-                  {stage.label}{isCompleted ? " - done" : isFailed ? " - failed" : "..."}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {showResultSummary && resultSummary && (
         <div className="response-section mb-3">
@@ -235,7 +222,7 @@ export function SQLTransparencyPanel({
           </div>
           <div className="response-evidence max-h-72 overflow-auto p-0">
             <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 bg-muted/45 backdrop-blur-sm">
+              <thead className="sticky top-0 bg-muted">
                 <tr>
                   {columns.map((column) => (
                     <th
@@ -271,6 +258,35 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
+      {shouldShowTablePlaceholder && (
+        <div className="response-section mb-3">
+          <div className="mb-2 flex items-center gap-2">
+            <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
+              Query Results
+            </p>
+            <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
+              <span className="animate-pulse">Preparing result table</span>
+              <span className="inline-flex">
+                <span className="animate-bounce [animation-delay:0ms]">.</span>
+                <span className="animate-bounce [animation-delay:150ms]">.</span>
+                <span className="animate-bounce [animation-delay:300ms]">.</span>
+              </span>
+            </span>
+          </div>
+          <div className="response-evidence overflow-hidden p-0">
+            <div className="border-border/60 border-b bg-muted/45 px-3 py-2.5">
+              <div className="h-3 w-28 animate-pulse rounded bg-foreground/15" />
+            </div>
+            <div className="space-y-2 px-3 py-3">
+              <div className="h-3 w-full animate-pulse rounded bg-foreground/10" />
+              <div className="h-3 w-[92%] animate-pulse rounded bg-foreground/10" />
+              <div className="h-3 w-[86%] animate-pulse rounded bg-foreground/10" />
+              <div className="h-3 w-[90%] animate-pulse rounded bg-foreground/10" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {visualizationFigure && (
         <div className="response-section mb-3">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -303,7 +319,26 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
-      {!!visualizationCode && !visualizationFigure && (
+      {shouldShowVisualizationPlaceholder && (
+        <div className="response-section mb-3">
+          <div className="mb-2 flex items-center gap-2">
+            <p className="font-semibold text-sm tracking-tight">Data Visualization</p>
+            <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
+              <span className="animate-pulse">Building visualization</span>
+              <span className="inline-flex">
+                <span className="animate-bounce [animation-delay:0ms]">.</span>
+                <span className="animate-bounce [animation-delay:150ms]">.</span>
+                <span className="animate-bounce [animation-delay:300ms]">.</span>
+              </span>
+            </span>
+          </div>
+          <div className="response-evidence p-3">
+            <div className="h-[280px] w-full animate-pulse rounded-lg border border-border/50 bg-muted/30" />
+          </div>
+        </div>
+      )}
+
+      {!!visualizationCode && !visualizationFigure && !shouldShowVisualizationPlaceholder && (
         <div className="response-section mb-3 rounded-md border border-amber-300/60 bg-amber-50/40 p-2 text-xs text-amber-900">
           Deterministic Plotly chart is unavailable for this response. Summary and table remain available.
         </div>

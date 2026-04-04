@@ -39,6 +39,7 @@ const PurePreviewMessage = ({
   regenerate,
   isReadonly,
   requiresScrollPadding: _requiresScrollPadding,
+  rootRef,
   selectedVisibilityType,
   onEditFailedResponse,
   onRetryFailedResponse,
@@ -54,6 +55,7 @@ const PurePreviewMessage = ({
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   isReadonly: boolean;
   requiresScrollPadding: boolean;
+  rootRef?: (element: HTMLDivElement | null) => void;
   selectedVisibilityType: VisibilityType;
   onEditFailedResponse?: (errorMessageId: string) => void;
   onRetryFailedResponse?: (errorMessageId: string) => void;
@@ -206,6 +208,7 @@ const PurePreviewMessage = ({
       className="group/message fade-in w-full animate-in duration-300"
       data-role={message.role}
       data-testid={`message-${message.role}`}
+      ref={rootRef}
     >
       <div
         className={cn("relative flex w-full items-start gap-3 md:gap-4", {

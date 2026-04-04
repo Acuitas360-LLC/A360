@@ -42,6 +42,11 @@ export type CustomUIDataTypes = {
     plotly_trace_count?: number;
   };
   sqlRowCount: number;
+  progressStages: Array<{
+    key?: string;
+    label?: string;
+    state?: string;
+  }>;
   relevantQuestions: string[];
   suggestion: Suggestion;
   appendMessage: string;

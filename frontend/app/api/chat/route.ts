@@ -54,6 +54,7 @@ type HistoryMessage = {
 };
 
 type EmittableDataPartType =
+  | "data-progressStages"
   | "data-resultSummary"
   | "data-sqlQuery"
   | "data-sqlResult"
@@ -280,6 +281,11 @@ export async function POST(req: Request) {
         let emittedAssistantText = "";
         let bufferedAssistantText = "";
         let textFlushTimer: ReturnType<typeof setTimeout> | null = null;
+        const orderedProgressStageKeys: string[] = [];
+        const progressStageMap = new Map<
+          string,
+          { key: string; label: string; state: string }
+        >();
         const emittedPayloadByType = new Map<string, string>();
         const emittedDataParts = {
           sqlQuery: false,
@@ -538,6 +544,31 @@ export async function POST(req: Request) {
           }
 
           if (event.event === "status") {
+            const key = String(payload.key ?? "").trim();
+            if (!key) {
+              continue;
+            }
+
+            if (!progressStageMap.has(key)) {
+              orderedProgressStageKeys.push(key);
+            }
+
+            progressStageMap.set(key, {
+              key,
+              label: String(payload.label ?? key),
+              state: String(payload.state ?? "active"),
+            });
+
+            const normalizedStages = orderedProgressStageKeys
+              .map((stageKey) => progressStageMap.get(stageKey))
+              .filter(
+                (
+                  stage
+                ): stage is { key: string; label: string; state: string } =>
+                  Boolean(stage)
+              );
+
+            writeDataPartIfChanged("data-progressStages", normalizedStages);
             continue;
           }
 
