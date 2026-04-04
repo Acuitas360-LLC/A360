@@ -113,8 +113,11 @@ function PureSuggestedActions({
               className="h-8 rounded-full px-3"
               key={category.id}
               onClick={() => {
-                setSelectedCategoryId(category.id);
+                setSelectedCategoryId((currentCategoryId) =>
+                  currentCategoryId === category.id ? null : category.id
+                );
               }}
+              aria-pressed={isActive}
               size="sm"
               variant={isActive ? "default" : "outline"}
             >

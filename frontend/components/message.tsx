@@ -203,31 +203,36 @@ const PurePreviewMessage = ({
 
   return (
     <div
-      className="group/message fade-in w-full animate-in duration-200"
+      className="group/message fade-in w-full animate-in duration-300"
       data-role={message.role}
       data-testid={`message-${message.role}`}
     >
       <div
-        className={cn("relative flex w-full items-start gap-2 md:gap-3", {
+        className={cn("relative flex w-full items-start gap-3 md:gap-4", {
           "justify-end": message.role === "user" && mode !== "edit",
           "justify-start": message.role === "assistant",
+          "pl-2": message.role === "assistant",
         })}
       >
         {message.role === "assistant" && (
-          <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:absolute md:-left-10 md:top-0">
+          <div className="pointer-events-none hidden size-8 items-center justify-center rounded-full bg-background ring-1 ring-border xl:absolute xl:left-0 xl:top-0 xl:flex xl:-translate-x-[calc(100%+0.5rem)]">
             <SparklesIcon size={14} />
           </div>
         )}
 
         <div
           className={cn("flex flex-col", {
-            "gap-2 md:gap-4": message.parts?.some(
+            "gap-3 md:gap-4": message.parts?.some(
               (p) => p.type === "text" && p.text?.trim()
             ),
             "min-w-0 flex-1": message.role === "assistant" || mode === "edit",
             "max-w-[calc(100%-2.5rem)] sm:max-w-[min(fit-content,80%)]":
               message.role === "user" && mode !== "edit",
-          })}
+          },
+          message.role === "assistant" &&
+            mode === "view" &&
+            "response-shell"
+          )}
         >
           {attachmentsFromMessage.length > 0 && (
             <div
@@ -323,12 +328,12 @@ const PurePreviewMessage = ({
                 }
 
                 return (
-                  <div key={key}>
+                  <div className={cn("w-full", message.role === "assistant" && "response-section")} key={key}>
                     <MessageContent
                       className={cn({
-                        "wrap-break-word w-fit rounded-2xl bg-primary px-3 py-2 text-right text-primary-foreground":
+                        "wrap-break-word w-fit rounded-3xl bg-primary px-4 py-2.5 text-right text-primary-foreground":
                           message.role === "user",
-                        "bg-transparent px-0 py-0 text-left":
+                        "w-full rounded-none border-0 bg-transparent px-0 py-0 text-left shadow-none":
                           message.role === "assistant",
                       })}
                       data-testid="message-content"
@@ -559,16 +564,18 @@ const PurePreviewMessage = ({
           )}
 
           {!isReadonly && (
-            <MessageActions
-              chatId={chatId}
-              isLoading={isLoading}
-              key={`action-${message.id}`}
-              message={message}
-              onNegativeFeedbackRetry={onNegativeFeedbackRetry}
-              previousUserQuery={previousUserQuery}
-              setMode={setMode}
-              vote={vote}
-            />
+            <div className={cn(message.role === "assistant" && mode === "view" && "response-utility-row")}>
+              <MessageActions
+                chatId={chatId}
+                isLoading={isLoading}
+                key={`action-${message.id}`}
+                message={message}
+                onNegativeFeedbackRetry={onNegativeFeedbackRetry}
+                previousUserQuery={previousUserQuery}
+                setMode={setMode}
+                vote={vote}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -592,7 +599,7 @@ export const ThinkingMessage = () => {
           </div>
         </div>
 
-        <div className="flex min-w-0 w-full flex-col gap-2 md:gap-4">
+        <div className="response-shell flex min-w-0 w-full flex-col gap-2 md:gap-4">
           <div className="flex items-center gap-1 p-0 text-muted-foreground text-sm">
             <span className="animate-pulse">Thinking</span>
             <span className="inline-flex">

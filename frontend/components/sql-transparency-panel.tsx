@@ -4,10 +4,7 @@ import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChartErrorBoundary } from "@/components/chart-error-boundary";
-import { EChartsSpecChart } from "@/components/echarts-spec-chart";
 import { PlotlyFigureChart } from "@/components/plotly-figure-chart";
-import { QueryResultChart } from "@/components/query-result-chart";
-import { SpecChartRenderer } from "@/components/spec-chart-renderer";
 import type { VisibilityType } from "./visibility-selector";
 
 type SQLTransparencyPanelProps = {
@@ -143,7 +140,6 @@ export function SQLTransparencyPanel({
     Boolean(queryRows?.length) ||
     typeof rowCount === "number" ||
     Boolean(visualizationCode) ||
-    Boolean(visualizationSpec) ||
     Boolean(visualizationFigure) ||
     Boolean(relevantQuestions?.length);
 
@@ -152,15 +148,14 @@ export function SQLTransparencyPanel({
   }
 
   return (
-    <div className="mb-3 w-full rounded-xl border bg-card p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h4 className="font-semibold text-sm">Analysis Details</h4>
-        <Badge variant="outline">Parity View</Badge>
+    <div className="response-section mb-3 w-full">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="font-semibold text-base tracking-tight">Analysis Details</h4>
       </div>
 
       {!!normalizedProgressStages.length && (
-        <div className="mb-3 rounded-md border bg-muted/20 p-2">
-          <p className="mb-1 text-muted-foreground text-xs">Live Progress</p>
+        <div className="response-evidence response-section mb-3 p-3">
+          <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Live Progress</p>
           <div className="flex flex-wrap gap-2">
             {normalizedProgressStages.map((stage) => {
               const isCompleted = stage.state === "completed";
@@ -185,28 +180,30 @@ export function SQLTransparencyPanel({
       )}
 
       {showResultSummary && resultSummary && (
-        <div className="mb-3">
-          <p className="mb-1 text-muted-foreground text-xs">Result Summary</p>
-          <p className="text-sm">{resultSummary}</p>
+        <div className="response-section mb-3">
+          <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Result Summary</p>
+          <p className="text-sm leading-6 text-foreground/95">{resultSummary}</p>
         </div>
       )}
 
       {sqlQuery && !isMarketingHead && (
-        <div className="mb-3">
-          <p className="mb-1 text-muted-foreground text-xs">SQL Query Executed</p>
-          <pre className="overflow-x-auto rounded-md border bg-muted p-2 text-xs">
+        <div className="response-section mb-3">
+          <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">SQL Query Executed</p>
+          <pre className="response-evidence overflow-x-auto p-2 text-xs">
             <code>{sqlQuery}</code>
           </pre>
         </div>
       )}
 
       {(columns?.length || typeof rowCount === "number") && (
-        <div className="mb-2 flex flex-wrap gap-2 text-xs">
+        <div className="response-section mb-2 flex flex-wrap gap-2 text-xs">
           {typeof rowCount === "number" && (
-            <span className="rounded-md border px-2 py-1">Rows: {rowCount}</span>
+            <span className="rounded-full border border-border/70 bg-muted/25 px-2.5 py-1 font-medium text-[11px] tracking-wide">
+              Rows: {rowCount}
+            </span>
           )}
           {!!columns?.length && (
-            <span className="rounded-md border px-2 py-1">
+            <span className="rounded-full border border-border/70 bg-muted/25 px-2.5 py-1 font-medium text-[11px] tracking-wide">
               Columns: {columns.length}
             </span>
           )}
@@ -214,12 +211,12 @@ export function SQLTransparencyPanel({
       )}
 
       {!!queryRows?.length && !!columns?.length && (
-        <div className="mb-3">
+        <div className="response-section mb-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-muted-foreground text-xs">Query Results</p>
+            <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Query Results</p>
             <div className="flex items-center gap-2">
               <Button
-                className="h-7"
+                className="h-7 rounded-md"
                 onClick={() => setShowAllRows((current) => !current)}
                 size="sm"
                 variant="outline"
@@ -227,7 +224,7 @@ export function SQLTransparencyPanel({
                 {showAllRows ? "Show First 20" : "Show All"}
               </Button>
               <Button
-                className="h-7"
+                className="h-7 rounded-md"
                 onClick={downloadCsv}
                 size="sm"
                 variant="outline"
@@ -236,12 +233,15 @@ export function SQLTransparencyPanel({
               </Button>
             </div>
           </div>
-          <div className="max-h-72 overflow-auto rounded-md border">
+          <div className="response-evidence max-h-72 overflow-auto p-0">
             <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 bg-muted/40">
+              <thead className="sticky top-0 bg-muted/45 backdrop-blur-sm">
                 <tr>
                   {columns.map((column) => (
-                    <th className="border-b px-2 py-2 font-medium" key={column}>
+                    <th
+                      className="border-border/70 border-b px-3 py-2.5 font-semibold text-[11px] text-foreground/85 uppercase tracking-wide"
+                      key={column}
+                    >
                       {column}
                     </th>
                   ))}
@@ -249,9 +249,12 @@ export function SQLTransparencyPanel({
               </thead>
               <tbody>
                 {visibleRows.map((row, rowIndex) => (
-                  <tr className="odd:bg-background even:bg-muted/20" key={`sql-row-${rowIndex}`}>
+                  <tr
+                    className="odd:bg-background even:bg-muted/20 transition-colors hover:bg-muted/35 hover:[&_td]:font-medium"
+                    key={`sql-row-${rowIndex}`}
+                  >
                     {columns.map((column) => (
-                      <td className="max-w-[280px] truncate px-2 py-1.5" key={`${rowIndex}-${column}`}>
+                      <td className="max-w-[280px] truncate px-3 py-2" key={`${rowIndex}-${column}`}>
                         {String(row[column] ?? "") || "-"}
                       </td>
                     ))}
@@ -269,16 +272,24 @@ export function SQLTransparencyPanel({
       )}
 
       {visualizationFigure && (
-        <div className="mb-3">
-          <p className="mb-2 text-muted-foreground text-xs">
-            Deterministic Plotly Charts
-          </p>
+        <div className="response-section mb-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <p className="font-semibold text-sm tracking-tight">Data Visualization</p>
+              <p className="mt-0.5 text-muted-foreground text-xs">Plotly renderer</p>
+            </div>
+            {typeof visualizationMeta?.plotly_trace_count === "number" && (
+              <Badge className="rounded-full" variant="outline">
+                {visualizationMeta.plotly_trace_count} trace{visualizationMeta.plotly_trace_count === 1 ? "" : "s"}
+              </Badge>
+            )}
+          </div>
           <ChartErrorBoundary>
             <PlotlyFigureChart figure={visualizationFigure} mode="normalized" />
           </ChartErrorBoundary>
           {visualizationMeta && (
-            <div className="mt-2 rounded-md border bg-muted/30 p-2 text-xs">
-              <p className="font-medium">Data Fidelity</p>
+            <div className="response-evidence mt-2 p-2 text-xs">
+              <p className="font-medium text-[11px] uppercase tracking-wide">Data Fidelity</p>
               <p className="mt-1 text-muted-foreground">
                 Source: {visualizationMeta.source || "sql_result_dataframe"} | Rows: {visualizationMeta.source_row_count ?? "-"} | Columns: {visualizationMeta.source_column_count ?? "-"} | Traces: {visualizationMeta.plotly_trace_count ?? "-"}
               </p>
@@ -293,66 +304,24 @@ export function SQLTransparencyPanel({
       )}
 
       {!!visualizationCode && !visualizationFigure && (
-        <div className="mb-3 rounded-md border border-amber-300/60 bg-amber-50/40 p-2 text-xs text-amber-900">
-          Deterministic Plotly chart is unavailable for this response. Showing heuristic fallback below.
-        </div>
-      )}
-
-      {!!queryRows?.length && !!columns?.length && !!visualizationCode && (
-        <div className="mb-3">
-          <p className="mb-2 text-muted-foreground text-xs">
-            Heuristic Chart 3 (table-based fallback)
-          </p>
-          <ChartErrorBoundary>
-            <QueryResultChart columns={columns} rows={queryRows} />
-          </ChartErrorBoundary>
-        </div>
-      )}
-
-      {!!queryRows?.length && !!visualizationSpec && (
-        <div className="mb-3">
-          <p className="mb-2 text-muted-foreground text-xs">
-            Spec Chart 4 (new visualization-spec node)
-          </p>
-          <ChartErrorBoundary>
-            <SpecChartRenderer rows={queryRows} visualizationSpec={visualizationSpec} />
-          </ChartErrorBoundary>
-        </div>
-      )}
-
-      {!!queryRows?.length && !!visualizationSpec && (
-        <div className="mb-3">
-          <p className="mb-2 text-muted-foreground text-xs">
-            ECharts Spec Chart (comparison)
-          </p>
-          <ChartErrorBoundary>
-            <EChartsSpecChart rows={queryRows} visualizationSpec={visualizationSpec} />
-          </ChartErrorBoundary>
+        <div className="response-section mb-3 rounded-md border border-amber-300/60 bg-amber-50/40 p-2 text-xs text-amber-900">
+          Deterministic Plotly chart is unavailable for this response. Summary and table remain available.
         </div>
       )}
 
       {visualizationCode && !isMarketingHead && (
-        <div className="mb-3">
-          <p className="mb-1 text-muted-foreground text-xs">Visualization Payload</p>
-          <pre className="overflow-x-auto rounded-md border bg-muted p-2 text-xs">
+        <div className="response-section mb-3">
+          <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Visualization Payload</p>
+          <pre className="response-evidence overflow-x-auto p-2 text-xs">
             <code>{visualizationCode}</code>
           </pre>
         </div>
       )}
 
-      {visualizationSpec && !isMarketingHead && (
-        <div className="mb-3">
-          <p className="mb-1 text-muted-foreground text-xs">Visualization Spec Payload (New Node)</p>
-          <pre className="overflow-x-auto rounded-md border bg-muted p-2 text-xs">
-            <code>{visualizationSpec}</code>
-          </pre>
-        </div>
-      )}
-
       {!!relevantQuestions?.length && (
-        <div>
-          <p className="mb-1 text-muted-foreground text-xs">Potential Followup Questions</p>
-          <ul className="list-disc pl-5 text-sm">
+        <div className="response-section">
+          <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Potential Follow-up Questions</p>
+          <ul className="list-disc space-y-1.5 pl-5 text-sm leading-6">
             {relevantQuestions.map((question) => (
               <li key={question}>{question}</li>
             ))}

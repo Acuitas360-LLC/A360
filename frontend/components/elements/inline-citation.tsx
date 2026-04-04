@@ -30,7 +30,10 @@ export const InlineCitation = ({
   ...props
 }: InlineCitationProps) => (
   <span
-    className={cn("group inline items-center gap-1", className)}
+    className={cn(
+      "group inline-flex items-baseline gap-1 align-baseline",
+      className
+    )}
     {...props}
   />
 );
@@ -42,7 +45,10 @@ export const InlineCitationText = ({
   ...props
 }: InlineCitationTextProps) => (
   <span
-    className={cn("transition-colors group-hover:bg-accent", className)}
+    className={cn(
+      "rounded-sm px-0.5 transition-colors group-hover:bg-accent/15",
+      className
+    )}
     {...props}
   />
 );
@@ -64,7 +70,10 @@ export const InlineCitationCardTrigger = ({
 }: InlineCitationCardTriggerProps) => (
   <HoverCardTrigger asChild>
     <Badge
-      className={cn("ml-1 rounded-full", className)}
+      className={cn(
+        "ml-1 inline-flex max-w-[18rem] items-center gap-1 rounded-full border border-border/70 bg-background/85 px-2 py-0.5 align-baseline font-medium text-[11px] leading-4 text-muted-foreground transition-all duration-150 hover:-translate-y-[1px] hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        className
+      )}
       variant="secondary"
       {...props}
     >
@@ -86,7 +95,13 @@ export const InlineCitationCardBody = ({
   className,
   ...props
 }: InlineCitationCardBodyProps) => (
-  <HoverCardContent className={cn("relative w-80 p-0", className)} {...props} />
+  <HoverCardContent
+    className={cn(
+      "relative w-[22rem] rounded-xl border border-border/70 bg-popover/95 p-0 shadow-lg backdrop-blur-sm",
+      className
+    )}
+    {...props}
+  />
 );
 
 const CarouselApiContext = createContext<CarouselApi | undefined>(undefined);
@@ -127,7 +142,7 @@ export const InlineCitationCarouselItem = ({
   ...props
 }: InlineCitationCarouselItemProps) => (
   <CarouselItem
-    className={cn("w-full space-y-2 p-4 pl-8", className)}
+    className={cn("w-full space-y-2 p-4 pl-9", className)}
     {...props}
   />
 );
@@ -140,7 +155,7 @@ export const InlineCitationCarouselHeader = ({
 }: InlineCitationCarouselHeaderProps) => (
   <div
     className={cn(
-      "flex items-center justify-between gap-2 rounded-t-md bg-secondary p-2",
+      "flex items-center justify-between gap-2 rounded-t-xl border-border/60 border-b bg-muted/55 px-2.5 py-2",
       className
     )}
     {...props}
@@ -213,7 +228,10 @@ export const InlineCitationCarouselPrev = ({
   return (
     <button
       aria-label="Previous"
-      className={cn("shrink-0", className)}
+      className={cn(
+        "shrink-0 rounded-md p-1 transition-colors duration-150 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        className
+      )}
       onClick={handleClick}
       type="button"
       {...props}
@@ -240,7 +258,10 @@ export const InlineCitationCarouselNext = ({
   return (
     <button
       aria-label="Next"
-      className={cn("shrink-0", className)}
+      className={cn(
+        "shrink-0 rounded-md p-1 transition-colors duration-150 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        className
+      )}
       onClick={handleClick}
       type="button"
       {...props}
@@ -289,7 +310,7 @@ export const InlineCitationQuote = ({
 }: InlineCitationQuoteProps) => (
   <blockquote
     className={cn(
-      "border-muted border-l-2 pl-3 text-muted-foreground text-sm italic",
+      "rounded-r-md border-muted border-l-2 bg-muted/20 py-1 pl-3 text-muted-foreground text-sm italic",
       className
     )}
     {...props}

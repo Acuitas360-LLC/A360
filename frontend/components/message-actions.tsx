@@ -99,11 +99,11 @@ export function PureMessageActions({
   // User messages get edit (on hover) and copy actions
   if (message.role === "user") {
     return (
-      <Actions className="-mr-0.5 justify-end">
+      <Actions className="mt-1 -mr-0.5 justify-end">
         <div className="relative">
           {setMode && (
             <Action
-              className="absolute top-0 -left-10 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/message:opacity-100"
+              className="absolute top-0 -left-10 opacity-0 transition-opacity duration-150 focus-visible:opacity-100 group-hover/message:opacity-100"
               data-testid="message-edit-button"
               onClick={() => setMode("edit")}
               tooltip="Edit"
@@ -120,7 +120,7 @@ export function PureMessageActions({
   }
 
   return (
-    <Actions className="-ml-0.5">
+    <Actions className="mt-1.5 pl-0.5 md:pl-0">
       <Action onClick={handleCopy} tooltip="Copy">
         <CopyIcon />
       </Action>
@@ -187,10 +187,10 @@ export function PureMessageActions({
       </Action>
 
       {showDownvoteFeedback && (
-        <div className="mt-2 w-full rounded-xl border bg-background p-3">
+        <div className="response-evidence mt-2 w-full p-3">
           <p className="mb-2 font-medium text-sm">What went wrong?</p>
           <Textarea
-            className="min-h-[88px]"
+            className="min-h-[88px] bg-background/80"
             onChange={(event) => setFeedbackText(event.target.value)}
             placeholder="Share what was wrong so we can regenerate a better response..."
             value={feedbackText}

@@ -13,7 +13,7 @@
 
 /* define design tokens (light mode) */
 :root {
-  --background: hsl(0 0% 100%);            /* white bg */
+  --background:hsl(0 0% 98%);    /* white bg */
   --foreground: hsl(240 10% 3.9%);         /* black text */
   --primary: hsl(197.23 47.87% 41.37%);    /* teal brand color */
   --primary-foreground: hsl(0 0% 100%);    /* white text on primary */
@@ -50,9 +50,9 @@
   --chart-3: hsl(197 37% 24%);
   --chart-4: hsl(43 74% 66%);
   --chart-5: hsl(27 87% 67%);
-  --sidebar-background: hsl(0 0% 98%);
+  --sidebar-background: #F6F6F3;
   --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar-primary: hsl(197.23 47.87% 41.37%);
   --sidebar-primary-foreground: hsl(0 0% 98%);
   --sidebar-accent: hsl(240 4.8% 95.9%);
   --sidebar-accent-foreground: hsl(240 5.9% 10%);
@@ -60,7 +60,20 @@
   --sidebar-ring: hsl(197.23 47.87% 41.37%);
   /* border radius unit */
   --radius: 0.5rem;
-  --sidebar: hsl(0 0% 98%);
+  --sidebar: #F6F6F3;
+  --response-shell-bg: hsl(0 0% 100% / 0.92);
+  --response-shell-border: hsl(240 6% 84% / 0.9);
+  --response-shell-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --response-evidence-bg: hsl(240 7% 97% / 0.9);
+  --response-evidence-border: hsl(240 6% 88% / 0.9);
+  --response-divider: hsl(240 7% 86% / 0.8);
+  --response-strip-solid: hsl(197.23 60% 44%);
+  --response-strip: linear-gradient(
+    180deg,
+    hsl(197.23 47.87% 41.37% / 0.9) 0%,
+    hsl(197.23 80% 40% / 0.75) 60%,
+    hsl(197.23 80% 40% / 0.5) 100%
+  );
 }
 
 /* define design tokens (dark mode) */
@@ -110,6 +123,19 @@
   --sidebar-border: hsl(240 3.7% 15.9%);
   --sidebar-ring: hsl(197.23 47.87% 41.37%);;
   --sidebar: hsl(240 5.9% 10%);
+  --response-shell-bg: hsl(240 8% 10% / 0.8);
+  --response-shell-border: hsl(240 5% 26% / 0.9);
+  --response-shell-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --response-evidence-bg: hsl(240 7% 14% / 0.78);
+  --response-evidence-border: hsl(240 5% 24% / 0.9);
+  --response-divider: hsl(240 5% 24% / 0.85);
+  --response-strip-solid: hsl(197.23 64% 57%);
+  --response-strip: linear-gradient(
+    180deg,
+    hsl(197.23 55% 58% / 0.9) 0%,
+    hsl(197.23 80% 48% / 0.7) 55%,
+    hsl(197.23 80% 48% / 0.45) 100%
+  );
 }
 
 /* define theme */
@@ -243,6 +269,32 @@
 
   html {
     overflow-x: hidden;
+  }
+}
+
+@layer components {
+  .response-shell {
+    @apply relative overflow-hidden rounded-2xl border px-4 py-3;
+    border-left: 4px solid var(--response-strip-solid);
+    background: var(--response-shell-bg);
+    border-color: var(--response-shell-border);
+    border-left-color: var(--response-strip-solid);
+    box-shadow: var(--response-shell-shadow);
+  }
+
+  .response-section + .response-section {
+    @apply mt-3;
+  }
+
+  .response-evidence {
+    @apply rounded-xl border p-3;
+    background: var(--response-evidence-bg);
+    border-color: var(--response-evidence-border);
+  }
+
+  .response-utility-row {
+    @apply mt-2 border-t pt-2;
+    border-color: var(--response-divider);
   }
 }
 
