@@ -1,5 +1,6 @@
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { ChatbotError } from "@/lib/errors";
+import { withForwardedAuthHeaders } from "@/lib/server/auth-forward";
 
 const BACKEND_API_BASE_URL =
   process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -220,7 +221,9 @@ export async function POST(req: Request) {
 
     const backendResponse = await fetch(`${BACKEND_API_BASE_URL}/api/v1/chat/stream`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withForwardedAuthHeaders(req, {
+        "Content-Type": "application/json",
+      }),
       body: JSON.stringify({ question, thread_id: threadId }),
       signal: req.signal,
     });
@@ -373,7 +376,11 @@ export async function POST(req: Request) {
           const fetchLatestAssistantParts = async (): Promise<HistoryMessagePart[]> => {
             const historyResponse = await fetch(
               `${BACKEND_API_BASE_URL}/api/v1/history/${encodeURIComponent(threadId)}`,
-              { cache: "no-store", signal: req.signal }
+              {
+                cache: "no-store",
+                signal: req.signal,
+                headers: withForwardedAuthHeaders(req),
+              }
             );
 
             if (!historyResponse.ok) {
@@ -754,7 +761,10 @@ export async function DELETE(request: Request) {
 
   const backendResponse = await fetch(
     `${BACKEND_API_BASE_URL}/api/v1/history/${encodeURIComponent(chatId)}`,
-    { method: "DELETE" }
+    {
+      method: "DELETE",
+      headers: withForwardedAuthHeaders(request),
+    }
   );
 
   if (!backendResponse.ok) {

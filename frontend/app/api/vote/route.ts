@@ -1,5 +1,6 @@
 import type { Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
+import { withForwardedAuthHeaders } from "@/lib/server/auth-forward";
 
 const BACKEND_API_BASE_URL =
   process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -13,7 +14,10 @@ export async function GET(request: Request) {
   }
 
   const backendResponse = await fetch(
-    `${BACKEND_API_BASE_URL}/api/v1/votes?thread_id=${encodeURIComponent(chatId)}`
+    `${BACKEND_API_BASE_URL}/api/v1/votes?thread_id=${encodeURIComponent(chatId)}`,
+    {
+      headers: withForwardedAuthHeaders(request),
+    }
   );
 
   if (!backendResponse.ok) {
@@ -41,7 +45,9 @@ export async function PATCH(request: Request) {
 
   const backendResponse = await fetch(`${BACKEND_API_BASE_URL}/api/v1/votes`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: withForwardedAuthHeaders(request, {
+      "Content-Type": "application/json",
+    }),
     body: JSON.stringify({
       thread_id: body.chatId,
       message_id: body.messageId,

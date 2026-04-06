@@ -8,6 +8,7 @@ import { type ClassValue, clsx } from 'clsx';
 import { formatISO } from 'date-fns';
 import { twMerge } from 'tailwind-merge';
 import type { DBMessage, Document } from '@/lib/db/schema';
+import { clearStoredIdToken, withBrowserAuthHeaders } from '@/lib/iframe-auth';
 import { ChatbotError, type ErrorCode } from './errors';
 import type { ChatMessage, ChatTools, CustomUIDataTypes } from './types';
 
@@ -16,7 +17,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const fetcher = async (url: string) => {
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: withBrowserAuthHeaders(),
+  });
 
   if (!response.ok) {
     let code: ErrorCode = 'bad_request:api';
@@ -44,7 +47,10 @@ export async function fetchWithErrorHandlers(
   init?: RequestInit,
 ) {
   try {
-    const response = await fetch(input, init);
+    const response = await fetch(input, {
+      ...init,
+      headers: withBrowserAuthHeaders(init?.headers),
+    });
 
     if (!response.ok) {
       let code: ErrorCode = 'bad_request:chat';
@@ -54,6 +60,7 @@ export async function fetchWithErrorHandlers(
         code = 'rate_limit:chat';
       } else if (response.status === 401) {
         code = 'unauthorized:chat';
+        clearStoredIdToken();
       } else if (response.status === 403) {
         code = 'forbidden:chat';
       } else if (response.status === 404) {

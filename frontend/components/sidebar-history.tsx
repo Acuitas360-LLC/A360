@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import type { User } from "@/lib/db/schema";
 import type { Chat } from "@/lib/db/schema";
+import { withBrowserAuthHeaders } from "@/lib/iframe-auth";
 import { fetcher } from "@/lib/utils";
 import { LoaderIcon } from "./icons";
 import { ChatItem } from "./sidebar-history-item";
@@ -194,6 +195,7 @@ export function SidebarHistory({
 
     const deletePromise = fetch(`/api/chat?id=${chatToDelete}`, {
       method: "DELETE",
+      headers: withBrowserAuthHeaders(),
     }).then(async (response) => {
       if (!response.ok) {
         const text = await response.text();

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { useCopyToClipboard } from "usehooks-ts";
 import type { Vote } from "@/lib/db/schema";
+import { withBrowserAuthHeaders } from "@/lib/iframe-auth";
 import type { ChatMessage } from "@/lib/types";
 import { Action, Actions } from "./elements/actions";
 import { CopyIcon, PencilEditIcon, ThumbDownIcon, ThumbUpIcon } from "./icons";
@@ -131,6 +132,7 @@ export function PureMessageActions({
         onClick={() => {
           const upvote = fetch("/api/vote", {
             method: "PATCH",
+            headers: withBrowserAuthHeaders(),
             body: JSON.stringify({
               chatId,
               messageId: message.id,
@@ -161,6 +163,7 @@ export function PureMessageActions({
         onClick={() => {
           const downvote = fetch("/api/vote", {
             method: "PATCH",
+            headers: withBrowserAuthHeaders(),
             body: JSON.stringify({
               chatId,
               messageId: message.id,
@@ -209,6 +212,7 @@ export function PureMessageActions({
                 try {
                   const response = await fetch("/api/vote", {
                     method: "PATCH",
+                    headers: withBrowserAuthHeaders(),
                     body: JSON.stringify({
                       chatId,
                       messageId: message.id,

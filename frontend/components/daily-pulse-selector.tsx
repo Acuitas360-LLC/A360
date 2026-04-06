@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PulseIcon } from "@/components/icons";
+import { withBrowserAuthHeaders } from "@/lib/iframe-auth";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,7 +45,10 @@ export function DailyPulseSelector({
     const loadQuestions = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch("/api/daily-pulse", { cache: "no-store" });
+        const response = await fetch("/api/daily-pulse", {
+          cache: "no-store",
+          headers: withBrowserAuthHeaders(),
+        });
         if (!response.ok) {
           const detail = await response.text();
           throw new Error(detail || "Failed to load Daily Pulse questions");
@@ -118,7 +122,7 @@ export function DailyPulseSelector({
     try {
       const response = await fetch("/api/daily-pulse", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: withBrowserAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ questions: deduped }),
       });
 

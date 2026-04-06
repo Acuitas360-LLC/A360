@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { IframeAuthBridge } from "@/components/iframe-auth-bridge";
 import { ThemeProvider } from "@/components/theme-provider";
 
 import "./globals.css";
@@ -77,6 +78,7 @@ export default function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
+          <IframeAuthBridge />
           <Toaster position="top-center" />
           {children}
         </ThemeProvider>

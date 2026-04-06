@@ -13,6 +13,7 @@ import {
   SidebarHistory,
 } from "@/components/sidebar-history";
 import type { User } from "@/lib/db/schema";
+import { withBrowserAuthHeaders } from "@/lib/iframe-auth";
 import { generateThreadId } from "@/lib/utils";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ export function AppSidebar({
   const handleDeleteAll = () => {
     const deletePromise = fetch("/api/history", {
       method: "DELETE",
+      headers: withBrowserAuthHeaders(),
     }).then(async (response) => {
       if (!response.ok) {
         const text = await response.text();
