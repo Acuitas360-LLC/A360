@@ -9,6 +9,8 @@ import { SidebarToggle } from "@/components/sidebar-toggle";
 import { Button } from "@/components/ui/button";
 import {
   AUTH_TOKEN_UPDATED_EVENT,
+  authDebugLog,
+  getAuthDebugSnapshot,
   getTokenProfileFromStorage,
   type TokenProfile,
 } from "@/lib/iframe-auth";
@@ -34,7 +36,9 @@ function PureChatHeader({
 
   useEffect(() => {
     const syncProfile = () => {
-      setTokenProfile(getTokenProfileFromStorage());
+      const profile = getTokenProfileFromStorage();
+      setTokenProfile(profile);
+      authDebugLog("info", "Header auth sync", getAuthDebugSnapshot());
     };
 
     syncProfile();
@@ -89,7 +93,7 @@ function PureChatHeader({
 
         <Button
           aria-label="Authenticated user"
-          className="h-8 w-8 rounded-full p-0"
+          className="h-8 max-w-[15rem] gap-2 rounded-full px-2"
           title={tokenProfile?.email ?? tokenProfile?.name ?? "Authenticated user"}
           variant="outline"
         >
@@ -102,6 +106,9 @@ function PureChatHeader({
               {tokenProfile?.initials ?? "U"}
             </AvatarFallback>
           </Avatar>
+          <span className="hidden max-w-[9rem] truncate text-xs md:inline-block">
+            {tokenProfile?.name ?? tokenProfile?.email ?? "Token not received"}
+          </span>
         </Button>
       </div>
     </header>

@@ -1,6 +1,9 @@
 export const IFRAME_ID_TOKEN_STORAGE_KEY = "onehum.idToken";
 export const AUTH_TOKEN_UPDATED_EVENT = "chatbot-auth-token-updated";
 
+const AUTH_DEBUG_ENABLED =
+  (process.env.NEXT_PUBLIC_AUTH_DEBUG ?? "").trim().toLowerCase() === "true";
+
 type TokenClaims = {
   preferred_username?: unknown;
   upn?: unknown;
@@ -15,6 +18,22 @@ export type TokenProfile = {
   name?: string;
   initials: string;
   avatarUrl?: string;
+};
+
+export type AuthDebugSnapshot = {
+  tokenPresent: boolean;
+  token: string | null;
+  profile: TokenProfile | null;
+  claims: {
+    userId?: string;
+    tenantId?: string;
+    audience?: string;
+    issuer?: string;
+    issuedAt?: number;
+    expiresAt?: number;
+    name?: string;
+    email?: string;
+  } | null;
 };
 
 function normalizeToken(value: unknown): string | null {
@@ -60,6 +79,29 @@ export function isTrustedParentOrigin(origin: string): boolean {
   return allowedOrigins.includes(origin);
 }
 
+export function isAuthDebugEnabled(): boolean {
+  return AUTH_DEBUG_ENABLED;
+}
+
+export function authDebugLog(level: "info" | "warn" | "error", ...args: unknown[]): void {
+  if (!AUTH_DEBUG_ENABLED || typeof window === "undefined") {
+    return;
+  }
+
+  const prefix = "[AuthBridge]";
+  if (level === "warn") {
+    console.warn(prefix, ...args);
+    return;
+  }
+
+  if (level === "error") {
+    console.error(prefix, ...args);
+    return;
+  }
+
+  console.info(prefix, ...args);
+}
+
 export function getStoredIdToken(): string | null {
   if (typeof window === "undefined") {
     return null;
@@ -83,6 +125,11 @@ export function setStoredIdToken(token: string): void {
   window.sessionStorage.setItem(IFRAME_ID_TOKEN_STORAGE_KEY, token);
   window.localStorage.setItem(IFRAME_ID_TOKEN_STORAGE_KEY, token);
   window.dispatchEvent(new Event(AUTH_TOKEN_UPDATED_EVENT));
+
+  authDebugLog("info", "Stored token in sessionStorage and localStorage", {
+    token,
+    tokenLength: token.length,
+  });
 }
 
 export function clearStoredIdToken(): void {
@@ -93,6 +140,8 @@ export function clearStoredIdToken(): void {
   window.sessionStorage.removeItem(IFRAME_ID_TOKEN_STORAGE_KEY);
   window.localStorage.removeItem(IFRAME_ID_TOKEN_STORAGE_KEY);
   window.dispatchEvent(new Event(AUTH_TOKEN_UPDATED_EVENT));
+
+  authDebugLog("info", "Cleared stored token");
 }
 
 export function extractIdTokenFromPostMessage(data: unknown): string | null {
@@ -158,6 +207,39 @@ function getTokenClaims(token: string): TokenClaims | null {
   return null;
 }
 
+function getDebugClaims(claims: TokenClaims | null) {
+  if (!claims) {
+    return null;
+  }
+
+  const userId = toNonEmptyString((claims as Record<string, unknown>).oid)
+    ?? toNonEmptyString((claims as Record<string, unknown>).sub);
+  const tenantId = toNonEmptyString((claims as Record<string, unknown>).tid);
+  const audience = toNonEmptyString((claims as Record<string, unknown>).aud);
+  const issuer = toNonEmptyString((claims as Record<string, unknown>).iss);
+  const issuedAtRaw = (claims as Record<string, unknown>).iat;
+  const expiresAtRaw = (claims as Record<string, unknown>).exp;
+  const issuedAt = typeof issuedAtRaw === "number" ? issuedAtRaw : undefined;
+  const expiresAt = typeof expiresAtRaw === "number" ? expiresAtRaw : undefined;
+
+  const email =
+    toNonEmptyString(claims.preferred_username)
+    ?? toNonEmptyString(claims.upn)
+    ?? toNonEmptyString(claims.email);
+  const name = toNonEmptyString(claims.name);
+
+  return {
+    userId,
+    tenantId,
+    audience,
+    issuer,
+    issuedAt,
+    expiresAt,
+    name,
+    email,
+  };
+}
+
 function toNonEmptyString(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -198,5 +280,18 @@ export function getTokenProfileFromStorage(): TokenProfile | null {
     name,
     initials,
     avatarUrl: email ? `https://avatar.vercel.sh/${encodeURIComponent(email)}` : undefined,
+  };
+}
+
+export function getAuthDebugSnapshot(): AuthDebugSnapshot {
+  const token = getStoredIdToken();
+  const claims = token ? getTokenClaims(token) : null;
+  const profile = getTokenProfileFromStorage();
+
+  return {
+    tokenPresent: Boolean(token),
+    token,
+    profile,
+    claims: getDebugClaims(claims),
   };
 }
