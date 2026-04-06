@@ -1,20 +1,22 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { Suspense } from "react";
 
 import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
+import { withForwardedAuthHeaders } from "@/lib/server/auth-forward";
 import type { ChatMessage } from "@/lib/types";
 
 const BACKEND_API_BASE_URL =
   process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000";
 
-async function getInitialMessages(chatId: string): Promise<ChatMessage[]> {
+async function getInitialMessages(chatId: string, authHeaders?: HeadersInit): Promise<ChatMessage[]> {
   try {
     const response = await fetch(
       `${BACKEND_API_BASE_URL}/api/v1/history/${encodeURIComponent(chatId)}`,
       {
         cache: "no-store",
+        headers: authHeaders,
       }
     );
 
@@ -39,10 +41,12 @@ export default function Page(props: { params: Promise<{ id: string }> }) {
 
 async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [initialMessages, cookieStore] = await Promise.all([
-    getInitialMessages(id),
-    cookies(),
-  ]);
+  const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
+  const requestLike = new Request("http://localhost", { headers: requestHeaders });
+  const initialMessages = await getInitialMessages(
+    id,
+    withForwardedAuthHeaders(requestLike)
+  );
   const chatModelFromCookie = cookieStore.get("chat-model");
 
   if (!chatModelFromCookie) {

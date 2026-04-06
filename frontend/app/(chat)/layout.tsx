@@ -1,18 +1,20 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import Script from "next/script";
 import { Suspense } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import type { ChatHistory } from "@/components/sidebar-history";
 import { DataStreamProvider } from "@/components/data-stream-provider";
+import { withForwardedAuthHeaders } from "@/lib/server/auth-forward";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 const BACKEND_API_BASE_URL =
   process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000";
 
-async function getInitialSidebarHistory(): Promise<ChatHistory | undefined> {
+async function getInitialSidebarHistory(authHeaders?: HeadersInit): Promise<ChatHistory | undefined> {
   try {
     const response = await fetch(`${BACKEND_API_BASE_URL}/api/v1/history?limit=20`, {
       cache: "no-store",
+      headers: authHeaders,
     });
 
     if (!response.ok) {
@@ -47,10 +49,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 }
 
 async function SidebarWrapper({ children }: { children: React.ReactNode }) {
-  const [cookieStore, initialHistory] = await Promise.all([
-    cookies(),
-    getInitialSidebarHistory(),
-  ]);
+  const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
+  const requestLike = new Request("http://localhost", { headers: requestHeaders });
+  const initialHistory = await getInitialSidebarHistory(
+    withForwardedAuthHeaders(requestLike)
+  );
   const isCollapsed = cookieStore.get("sidebar_state")?.value !== "true";
 
   return (
