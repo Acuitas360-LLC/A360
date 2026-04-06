@@ -10,11 +10,17 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 const BACKEND_API_BASE_URL =
   process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000";
 
+const SIDEBAR_HISTORY_TIMEOUT_MS = 1800;
+
 async function getInitialSidebarHistory(authHeaders?: HeadersInit): Promise<ChatHistory | undefined> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SIDEBAR_HISTORY_TIMEOUT_MS);
+
   try {
     const response = await fetch(`${BACKEND_API_BASE_URL}/api/v1/history?limit=20`, {
       cache: "no-store",
       headers: authHeaders,
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -29,6 +35,8 @@ async function getInitialSidebarHistory(authHeaders?: HeadersInit): Promise<Chat
     return payload;
   } catch {
     return undefined;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -37,7 +45,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <>
       <Script
         src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"
-        strategy="beforeInteractive"
+        strategy="lazyOnload"
       />
       <DataStreamProvider>
         <Suspense fallback={<div className="flex h-dvh" />}>
