@@ -17,10 +17,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { withBrowserAuthHeaders } from "@/lib/iframe-auth";
+import {
+  AUTH_TOKEN_UPDATED_EVENT,
+  getStoredIdToken,
+  withBrowserAuthHeaders,
+} from "@/lib/iframe-auth";
 import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
-import type { Vote } from "@/lib/db/schema";
+import type { Chat, Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import { useStreamingStore } from "@/lib/streaming-store";
 import type { Attachment, ChatMessage } from "@/lib/types";
@@ -28,7 +32,10 @@ import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Artifact } from "./artifact";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
-import { getChatHistoryPaginationKey } from "./sidebar-history";
+import {
+  getChatHistoryPaginationKey,
+  type ChatHistory,
+} from "./sidebar-history";
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
 
@@ -84,22 +91,61 @@ export function Chat({
     questions: string[];
     index: number;
   }>({ active: false, questions: [], index: 0 });
+
+  const appendOptimisticSidebarThread = useCallback(() => {
+    const historyKey = unstable_serialize(getChatHistoryPaginationKey);
+    const optimisticTitle = input.trim().slice(0, 80) || "New conversation";
+
+    const optimisticChat: Chat = {
+      id,
+      createdAt: new Date(),
+      title: optimisticTitle,
+      userId: "local-user",
+      visibility: "private",
+    };
+
+    mutate(
+      historyKey,
+      (currentData?: ChatHistory[]) => {
+        if (!currentData || currentData.length === 0) {
+          return [{ chats: [optimisticChat], hasMore: false }];
+        }
+
+        const alreadyExists = currentData.some((page) =>
+          page.chats.some((chat) => chat.id === id)
+        );
+
+        if (alreadyExists) {
+          return currentData;
+        }
+
+        const [firstPage, ...rest] = currentData;
+        return [
+          {
+            ...firstPage,
+            chats: [optimisticChat, ...firstPage.chats],
+          },
+          ...rest,
+        ];
+      },
+      { revalidate: false }
+    );
+  }, [id, input, mutate]);
+
   const handleSubmitTriggered = useCallback(() => {
     setSubmitSequence((current) => current + 1);
 
-    // Refresh sidebar history immediately on submit so newly created threads
-    // become visible without waiting for a second user message.
-    mutate(unstable_serialize(getChatHistoryPaginationKey));
+    // Show thread immediately in sidebar on first submit.
+    appendOptimisticSidebarThread();
 
-    // Backend thread registration can land slightly after submit in production;
-    // schedule short follow-up revalidations for consistency.
+    // Reconcile optimistic thread with backend state shortly after submit.
     setTimeout(() => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
-    }, 400);
+    }, 600);
     setTimeout(() => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
-    }, 1200);
-  }, [mutate]);
+    }, 1800);
+  }, [appendOptimisticSidebarThread, mutate]);
   const bulkDispatchInFlightRef = useRef(false);
   const previousStatusRef = useRef("ready");
   const bulkQueueRef = useRef<{ questions: string[]; index: number }>({
@@ -656,21 +702,32 @@ export function Chat({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
   const isInitialHomeState = messages.length === 0;
-  const [hasAttemptedHistoryHydration, setHasAttemptedHistoryHydration] =
-    useState(false);
+  const [historyHydrationTick, setHistoryHydrationTick] = useState(0);
 
   useEffect(() => {
-    if (hasAttemptedHistoryHydration) {
+    const notifyAuthUpdate = () => {
+      setHistoryHydrationTick((current) => current + 1);
+    };
+
+    window.addEventListener(AUTH_TOKEN_UPDATED_EVENT, notifyAuthUpdate);
+    window.addEventListener("storage", notifyAuthUpdate);
+
+    return () => {
+      window.removeEventListener(AUTH_TOKEN_UPDATED_EVENT, notifyAuthUpdate);
+      window.removeEventListener("storage", notifyAuthUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isNewThreadParam || initialMessages.length > 0 || messages.length > 0) {
       return;
     }
 
-    if (isNewThreadParam || initialMessages.length > 0) {
-      setHasAttemptedHistoryHydration(true);
+    if (!getStoredIdToken()) {
       return;
     }
 
     let active = true;
-    setHasAttemptedHistoryHydration(true);
 
     const hydrateHistory = async () => {
       try {
@@ -702,11 +759,12 @@ export function Chat({
       active = false;
     };
   }, [
-    hasAttemptedHistoryHydration,
     id,
     initialMessages.length,
     isNewThreadParam,
+    messages.length,
     setMessages,
+    historyHydrationTick,
   ]);
 
   useEffect(() => {
