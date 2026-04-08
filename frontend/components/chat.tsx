@@ -17,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { withBrowserAuthHeaders } from "@/lib/iframe-auth";
 import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import type { Vote } from "@/lib/db/schema";
@@ -642,6 +643,58 @@ export function Chat({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
   const isInitialHomeState = messages.length === 0;
+  const [hasAttemptedHistoryHydration, setHasAttemptedHistoryHydration] =
+    useState(false);
+
+  useEffect(() => {
+    if (hasAttemptedHistoryHydration) {
+      return;
+    }
+
+    if (isNewThreadParam || initialMessages.length > 0) {
+      setHasAttemptedHistoryHydration(true);
+      return;
+    }
+
+    let active = true;
+    setHasAttemptedHistoryHydration(true);
+
+    const hydrateHistory = async () => {
+      try {
+        const response = await fetch(`/api/history/${encodeURIComponent(id)}`, {
+          cache: "no-store",
+          headers: withBrowserAuthHeaders(),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { messages?: ChatMessage[] };
+        const hydratedMessages = Array.isArray(payload.messages)
+          ? payload.messages
+          : [];
+
+        if (active && hydratedMessages.length > 0) {
+          setMessages(hydratedMessages);
+        }
+      } catch {
+        // Keep UI responsive; chat can still continue with new messages.
+      }
+    };
+
+    void hydrateHistory();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    hasAttemptedHistoryHydration,
+    id,
+    initialMessages.length,
+    isNewThreadParam,
+    setMessages,
+  ]);
 
   useEffect(() => {
     return () => {
