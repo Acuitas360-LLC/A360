@@ -144,7 +144,8 @@ export function SidebarHistory({
     {
       fallbackData: initialHistory ? [initialHistory] : [],
       keepPreviousData: true,
-      revalidateFirstPage: !initialHistory,
+      // Always revalidate client-side so history uses browser auth headers.
+      revalidateFirstPage: true,
       revalidateOnFocus: false,
     }
   );
