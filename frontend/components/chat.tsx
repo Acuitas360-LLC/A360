@@ -86,7 +86,20 @@ export function Chat({
   }>({ active: false, questions: [], index: 0 });
   const handleSubmitTriggered = useCallback(() => {
     setSubmitSequence((current) => current + 1);
-  }, []);
+
+    // Refresh sidebar history immediately on submit so newly created threads
+    // become visible without waiting for a second user message.
+    mutate(unstable_serialize(getChatHistoryPaginationKey));
+
+    // Backend thread registration can land slightly after submit in production;
+    // schedule short follow-up revalidations for consistency.
+    setTimeout(() => {
+      mutate(unstable_serialize(getChatHistoryPaginationKey));
+    }, 400);
+    setTimeout(() => {
+      mutate(unstable_serialize(getChatHistoryPaginationKey));
+    }, 1200);
+  }, [mutate]);
   const bulkDispatchInFlightRef = useRef(false);
   const previousStatusRef = useRef("ready");
   const bulkQueueRef = useRef<{ questions: string[]; index: number }>({
