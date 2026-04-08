@@ -137,15 +137,7 @@ export function Chat({
 
     // Show thread immediately in sidebar on first submit.
     appendOptimisticSidebarThread();
-
-    // Reconcile optimistic thread with backend state shortly after submit.
-    setTimeout(() => {
-      mutate(unstable_serialize(getChatHistoryPaginationKey));
-    }, 600);
-    setTimeout(() => {
-      mutate(unstable_serialize(getChatHistoryPaginationKey));
-    }, 1800);
-  }, [appendOptimisticSidebarThread, mutate]);
+  }, [appendOptimisticSidebarThread]);
   const bulkDispatchInFlightRef = useRef(false);
   const previousStatusRef = useRef("ready");
   const bulkQueueRef = useRef<{ questions: string[]; index: number }>({
