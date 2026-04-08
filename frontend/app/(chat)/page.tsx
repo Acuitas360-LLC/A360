@@ -6,5 +6,5 @@ export default async function Page() {
   // Ensure request context is accessed before random id generation.
   await cookies();
   const id = generateThreadId();
-  redirect(`/chat/${id}`);
+  redirect(`/chat/${id}?new=1`);
 }

@@ -62,7 +62,7 @@ async function SidebarWrapper({ children }: { children: React.ReactNode }) {
   const initialHistory = await getInitialSidebarHistory(
     withForwardedAuthHeaders(requestLike)
   );
-  const isCollapsed = cookieStore.get("sidebar_state")?.value !== "true";
+  const isCollapsed = cookieStore.get("sidebar_state")?.value === "false";
 
   return (
     <SidebarProvider defaultOpen={!isCollapsed}>

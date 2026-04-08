@@ -47,13 +47,6 @@ export type ChatHistory = {
 
 const PAGE_SIZE = 20;
 
-const DEMO_CONVERSATIONS = [
-  { id: "demo-plan-week", title: "Plan my next 7 days" },
-  { id: "demo-summarize-pdf", title: "Summarize this PDF" },
-  { id: "demo-follow-up-email", title: "Write a follow-up email" },
-  { id: "demo-react-bug", title: "Fix my React bug" },
-];
-
 const groupChatsByDate = (chats: Chat[]): GroupedChats => {
   const now = new Date();
   const oneWeekAgo = subWeeks(now, 1);
@@ -151,6 +144,8 @@ export function SidebarHistory({
     {
       fallbackData: initialHistory ? [initialHistory] : [],
       keepPreviousData: true,
+      revalidateFirstPage: !initialHistory,
+      revalidateOnFocus: false,
     }
   );
 
@@ -229,28 +224,6 @@ export function SidebarHistory({
     });
   };
 
-  const renderDemoConversations = (label: string) => (
-    <SidebarGroup>
-      <div className="px-2 py-1 text-sidebar-foreground/50 text-xs">{label}</div>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          {DEMO_CONVERSATIONS.map((conversation) => (
-            <SidebarMenuItem key={conversation.id}>
-              <SidebarMenuButton asChild isActive={conversation.id === id}>
-                <Link href={`/chat/${conversation.id}`}>
-                  <span>{conversation.title}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-        <div className="px-2 pt-2 text-sidebar-foreground/50 text-xs">
-          Demo conversations shown for preview.
-        </div>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  );
-
   const hasLoadedPages = Boolean(
     paginatedChatHistories && paginatedChatHistories.length > 0
   );
@@ -288,15 +261,6 @@ export function SidebarHistory({
   }
 
   if (hasEmptyChatHistory) {
-    if (!user) {
-      return (
-        <>
-          {searchInputElement}
-          {renderDemoConversations("Try these")}
-        </>
-      );
-    }
-
     return (
       <>
         {searchInputElement}

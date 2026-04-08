@@ -617,6 +617,7 @@ export function Chat({
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
+  const isNewThreadParam = searchParams.get("new") === "1";
 
   const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
 
@@ -627,7 +628,11 @@ export function Chat({
       setHasAppendedQuery(true);
       window.history.replaceState({}, "", `/chat/${id}`);
     }
-  }, [query, hasAppendedQuery, id]);
+
+    if (!query && isNewThreadParam) {
+      window.history.replaceState({}, "", `/chat/${id}`);
+    }
+  }, [query, hasAppendedQuery, id, isNewThreadParam]);
 
   const { data: votes } = useSWR<Vote[]>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,

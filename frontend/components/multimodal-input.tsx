@@ -391,7 +391,7 @@ function PureMultimodalInput({
             maxHeight={MAX_TEXTAREA_HEIGHT}
             minHeight={defaultTextareaHeightRef.current}
             onChange={handleInput}
-            placeholder="Ask your Query"
+            placeholder="Ask your query"
             ref={textareaRef}
             rows={1}
             value={input}

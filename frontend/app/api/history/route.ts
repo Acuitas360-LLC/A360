@@ -4,6 +4,7 @@ import { withForwardedAuthHeaders } from "@/lib/server/auth-forward";
 
 const BACKEND_API_BASE_URL =
   process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000";
+const HISTORY_PROXY_TIMEOUT_MS = 3500;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -21,15 +22,29 @@ export async function GET(request: Request) {
     params.set("q", query);
   }
 
-  const backendResponse = await fetch(
-    `${BACKEND_API_BASE_URL}/api/v1/history?${params.toString()}`,
-    {
-      headers: withForwardedAuthHeaders(request),
-    }
-  );
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), HISTORY_PROXY_TIMEOUT_MS);
+
+  let backendResponse: Response;
+  try {
+    backendResponse = await fetch(
+      `${BACKEND_API_BASE_URL}/api/v1/history?${params.toString()}`,
+      {
+        headers: withForwardedAuthHeaders(request),
+        signal: controller.signal,
+      }
+    );
+  } catch {
+    return Response.json({ chats: [], hasMore: false });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!backendResponse.ok) {
     const detail = await backendResponse.text();
+    if (backendResponse.status === 401 || backendResponse.status === 403) {
+      return Response.json({ chats: [], hasMore: false });
+    }
     return new ChatbotError("bad_request:history", detail || "History fetch failed").toResponse();
   }
 

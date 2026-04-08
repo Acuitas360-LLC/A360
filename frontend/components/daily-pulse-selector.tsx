@@ -102,7 +102,7 @@ export function DailyPulseSelector({
     setQuestions((current) => [...current, ""]);
   };
 
-  const saveAndRun = async () => {
+  const persistQuestions = async ({ runAfterSave }: { runAfterSave: boolean }) => {
     if (isSaving) {
       return;
     }
@@ -128,7 +128,7 @@ export function DailyPulseSelector({
 
       if (!response.ok) {
         const detail = await response.text();
-        throw new Error(detail || "Failed to save FAQ questions");
+        throw new Error(detail || "Failed to save Daily Pulse questions");
       }
 
       const payload = (await response.json()) as DailyPulsePayload;
@@ -136,8 +136,13 @@ export function DailyPulseSelector({
         ? payload.questions.filter((q): q is string => typeof q === "string" && q.trim().length > 0)
         : deduped;
 
-      onConfigured?.(savedQuestions);
-      toast.success(`Started batch run for ${savedQuestions.length} questions`);
+      if (runAfterSave) {
+        onConfigured?.(savedQuestions);
+        toast.success(`Started batch run for ${savedQuestions.length} questions`);
+      } else {
+        toast.success(`Saved ${savedQuestions.length} question${savedQuestions.length === 1 ? "" : "s"}`);
+      }
+
       setOpen(false);
     } catch (error) {
       toast.error(
@@ -146,6 +151,14 @@ export function DailyPulseSelector({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const saveAndRun = async () => {
+    await persistQuestions({ runAfterSave: true });
+  };
+
+  const saveOnly = async () => {
+    await persistQuestions({ runAfterSave: false });
   };
 
   return (
@@ -165,14 +178,14 @@ export function DailyPulseSelector({
         <DialogHeader className="border-b px-6 pt-6 pb-4 text-left">
           <DialogTitle>Daily Pulse Questions</DialogTitle>
           <DialogDescription>
-            Review and edit FAQ.csv questions, then run them one by one.
+            Review and edit FAQ questions, then run them one by one.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-6 py-5">
           {isLoading ? (
             <div className="rounded-lg border bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
-              Loading FAQ.csv questions...
+              Loading FAQ questions...
             </div>
           ) : (
             <>
@@ -181,8 +194,8 @@ export function DailyPulseSelector({
                 <span className="font-medium text-muted-foreground">{nonEmptyCount}</span>
               </div>
 
-              <div className="min-h-0 rounded-lg border bg-background p-3">
-                <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
+              <div className="flex min-h-0 flex-1 flex-col rounded-lg border bg-background p-3">
+                <div className="min-h-0 max-h-[45vh] space-y-2 overflow-y-auto pb-1 pr-1">
                   {questions.map((question, index) => (
                     <div
                       className="flex items-center gap-2"
@@ -229,14 +242,26 @@ export function DailyPulseSelector({
               Cancel
             </Button>
 
-            <Button
-              className="w-full sm:w-auto"
-              disabled={isLoading || isSaving}
-              onClick={saveAndRun}
-              type="button"
-            >
-              {isSaving ? "Saving..." : "Save and Run"}
-            </Button>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <Button
+                className="w-full sm:w-auto"
+                disabled={isLoading || isSaving}
+                onClick={saveOnly}
+                type="button"
+                variant="outline"
+              >
+                Save
+              </Button>
+
+              <Button
+                className="w-full sm:w-auto"
+                disabled={isLoading || isSaving}
+                onClick={saveAndRun}
+                type="button"
+              >
+                {isSaving ? "Saving..." : "Save and Run"}
+              </Button>
+            </div>
           </div>
         </DialogFooter>
       </DialogContent>

@@ -25,40 +25,32 @@ const STARTER_QUESTION_CATEGORIES: readonly StarterCategory[] = [
     id: "nation",
     label: "Nation",
     questions: [
-      "Give me sales by week for recent 52 weeks?",
-      "How much did sales grow in the recent 4 weeks?",
-      "How many unique weeks of drug sales are available in the data?",
-      "How much did drug sales grow in recent 4 weeks and how does that compare with growth in recent 8 weeks?",
+      "How are sales trending?",
+      "Are we seeing strong short-term sales momentum?",
+      "How is the sales performance in the recent  quarter?",
+      "How has our sales performance evolved over the past year?",
+      "Is Rytelo gaining or losing share?"
     ],
   },
   {
     id: "geography",
     label: "Geography",
     questions: [
-      "Provide weekly sales trend by area and nation.",
-      "Provide weekly sales trend by region and nation.",
-      "Provide sales contribution by area and estimate growth in recent 4 weeks compared to previous 4 weeks.",
-      "Provide sales contribution by region and estimate growth in recent 4 weeks compared to previous 4 weeks.",
-    ],
+      "Which regions are growing and which are slowing down?",
+      "How does new account addition look like across regions?",
+      "How does account adoption look like across regions?",
+      "In which regions is Rytelo gaining or losing share?",
+     ],
   },
-  {
-    id: "parentAccounts",
-    label: "Parent Accounts",
-    questions: [
-      "What is the sales contribution of parent accounts by BC potential segment?",
-      "What is the sales contribution of parent accounts which are academic, IDNs, and community?",
-      "What is the sales growth in recent 4 weeks by parent account type and how does that compare with nation?",
-      "What is the sales growth in recent 4 weeks by BC potential segment and how does that compare with nation?",
-    ],
-  },
+  
   {
     id: "childAccounts",
-    label: "Child Accounts",
+    label: "Campus Accounts",
     questions: [
-      "What is the sales contribution of child accounts by BC potential segment?",
-      "What is the sales contribution of child accounts which are academic and community?",
-      "What is the sales growth in recent 4 weeks by child account type and how does that compare with nation?",
-      "What is the sales growth in recent 4 weeks by child BC potential segment and how does that compare with nation?",
+      "How does new account addition look like by tier type?",
+      "How does our breadth look like",
+      "How are we doing in terms of adding new businesses?",
+      "How does account adoption look like within target campuses across campus_tier?"
     ],
   },
 ];

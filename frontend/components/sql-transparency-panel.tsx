@@ -511,15 +511,6 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
-      {visualizationCode && !isMarketingHead && (
-        <div className="response-section mb-3">
-          <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Visualization Payload</p>
-          <pre className="response-evidence overflow-x-auto p-2 text-xs">
-            <code>{visualizationCode}</code>
-          </pre>
-        </div>
-      )}
-
       {!!relevantQuestions?.length && (
         <div className="response-section">
           <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Potential Follow-up Questions</p>

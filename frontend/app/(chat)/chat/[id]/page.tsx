@@ -31,22 +31,31 @@ async function getInitialMessages(chatId: string, authHeaders?: HeadersInit): Pr
   }
 }
 
-export default function Page(props: { params: Promise<{ id: string }> }) {
+export default function Page(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ new?: string }>;
+}) {
   return (
     <Suspense fallback={<div className="flex h-dvh" />}>
-      <ChatPage params={props.params} />
+      <ChatPage params={props.params} searchParams={props.searchParams} />
     </Suspense>
   );
 }
 
-async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+async function ChatPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ new?: string }>;
+}) {
+  const [{ id }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const isNewThread = resolvedSearchParams?.new === "1";
   const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
   const requestLike = new Request("http://localhost", { headers: requestHeaders });
-  const initialMessages = await getInitialMessages(
-    id,
-    withForwardedAuthHeaders(requestLike)
-  );
+  const initialMessages = isNewThread
+    ? []
+    : await getInitialMessages(id, withForwardedAuthHeaders(requestLike));
   const chatModelFromCookie = cookieStore.get("chat-model");
 
   if (!chatModelFromCookie) {
