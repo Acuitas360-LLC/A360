@@ -289,6 +289,13 @@ export async function POST(req: Request) {
           string,
           { key: string; label: string; state: string }
         >();
+        let summaryCompleted = false;
+        let pendingChartPayload: {
+          visualizationCode?: unknown;
+          visualizationSpec?: unknown;
+          visualizationFigure?: unknown;
+          visualizationMeta?: unknown;
+        } | null = null;
         const emittedPayloadByType = new Map<string, string>();
         const emittedDataParts = {
           sqlQuery: false,
@@ -323,6 +330,46 @@ export async function POST(req: Request) {
           emittedPayloadByType.set(type, digest);
           writer.write({ type, data });
           return true;
+        };
+
+        const emitChartPayload = (payload: {
+          visualizationCode?: unknown;
+          visualizationSpec?: unknown;
+          visualizationFigure?: unknown;
+          visualizationMeta?: unknown;
+        }) => {
+          const visualizationCode = payload.visualizationCode;
+          const visualizationSpec = payload.visualizationSpec;
+          const visualizationFigure = payload.visualizationFigure;
+          const visualizationMeta = payload.visualizationMeta;
+
+          if (typeof visualizationCode === "string" && visualizationCode.trim()) {
+            emittedDataParts.visualizationCode = writeDataPartIfChanged(
+              "data-visualizationCode",
+              visualizationCode
+            );
+          }
+
+          if (typeof visualizationSpec === "string" && visualizationSpec.trim()) {
+            emittedDataParts.visualizationSpec = writeDataPartIfChanged(
+              "data-visualizationSpec",
+              visualizationSpec
+            );
+          }
+
+          if (visualizationFigure && typeof visualizationFigure === "object") {
+            emittedDataParts.visualizationFigure = writeDataPartIfChanged(
+              "data-visualizationFigure",
+              visualizationFigure
+            );
+          }
+
+          if (visualizationMeta && typeof visualizationMeta === "object") {
+            emittedDataParts.visualizationMeta = writeDataPartIfChanged(
+              "data-visualizationMeta",
+              visualizationMeta
+            );
+          }
         };
 
         const flushBufferedAssistantText = () => {
@@ -619,6 +666,13 @@ export async function POST(req: Request) {
               }
             }
 
+            summaryCompleted = true;
+
+            if (pendingChartPayload) {
+              emitChartPayload(pendingChartPayload);
+              pendingChartPayload = null;
+            }
+
             if (textStarted && !textEnded) {
               writer.write({ type: "text-end", id: textId });
               textEnded = true;
@@ -659,39 +713,25 @@ export async function POST(req: Request) {
           }
 
           if (event.event === "chart_ready") {
-            const visualizationCode = payload.visualization_code;
-            const visualizationSpec = payload.visualization_spec;
-            const visualizationFigure = payload.visualization_figure;
-            const visualizationMeta = payload.visualization_meta;
+            const nextChartPayload = {
+              visualizationCode: payload.visualization_code,
+              visualizationSpec: payload.visualization_spec,
+              visualizationFigure: payload.visualization_figure,
+              visualizationMeta: payload.visualization_meta,
+            };
 
-            if (typeof visualizationCode === "string" && visualizationCode.trim()) {
-              emittedDataParts.visualizationCode = writeDataPartIfChanged(
-                "data-visualizationCode",
-                visualizationCode
-              );
+            if (summaryCompleted || textEnded) {
+              emitChartPayload(nextChartPayload);
+            } else {
+              // Keep only the latest chart payload while summary is still streaming.
+              pendingChartPayload = nextChartPayload;
             }
 
-            if (typeof visualizationSpec === "string" && visualizationSpec.trim()) {
-              emittedDataParts.visualizationSpec = writeDataPartIfChanged(
-                "data-visualizationSpec",
-                visualizationSpec
-              );
-            }
-
-            if (visualizationFigure && typeof visualizationFigure === "object") {
-              emittedDataParts.visualizationFigure = writeDataPartIfChanged(
-                "data-visualizationFigure",
-                visualizationFigure
-              );
-            }
-
-            if (visualizationMeta && typeof visualizationMeta === "object") {
-              emittedDataParts.visualizationMeta = writeDataPartIfChanged(
-                "data-visualizationMeta",
-                visualizationMeta
-              );
-            }
             continue;
+          }
+
+          if (event.event === "complete") {
+            break;
           }
 
           if (event.event === "related_questions_ready") {
@@ -727,6 +767,12 @@ export async function POST(req: Request) {
         }
 
         flushAndClearTextTimer();
+
+        if (pendingChartPayload) {
+          emitChartPayload(pendingChartPayload);
+          pendingChartPayload = null;
+        }
+
         await reconcileMissingDataParts();
 
         if (textStarted && !textEnded) {

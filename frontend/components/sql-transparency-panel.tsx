@@ -129,13 +129,17 @@ export function SQLTransparencyPanel({
   const PLACEHOLDER_EXIT_MS = 220;
   const MIN_TABLE_GENERATION_FEEL_MS = 280;
   const MIN_CHART_GENERATION_FEEL_MS = 340;
-  const isSummaryPhaseComplete = hasSummaryVisible || isSummaryStageCompleted;
+  const isSummaryPhaseComplete =
+    hasSummaryVisible ||
+    isSummaryStageCompleted ||
+    (!showResultSummary &&
+      (hasTableReady || Boolean(visualizationFigure) || Boolean(relevantQuestions?.length)));
   const canStartTablePhase = isSummaryPhaseComplete;
   const shouldShowTableContent =
     canStartTablePhase && hasTableReady && showTableContent;
   const canStartVisualizationPhase =
     isSummaryPhaseComplete &&
-    (shouldShowTableContent || (!hasTableReady && isResultTableStageCompleted));
+    (shouldShowTableContent || !hasTableReady || isResultTableStageCompleted);
   const shouldShowVisualizationContent =
     canStartVisualizationPhase &&
     Boolean(visualizationFigure) &&
@@ -512,7 +516,7 @@ export function SQLTransparencyPanel({
       )}
 
       {!!relevantQuestions?.length && (
-        <div className="response-section">
+        <div className="response-section mt-4">
           <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Potential Follow-up Questions</p>
           <ul className="list-disc space-y-1.5 pl-5 text-sm leading-6">
             {relevantQuestions.map((question) => (

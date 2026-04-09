@@ -52,6 +52,10 @@ function getLegendRowsEstimate(traceCount: number, avgLegendLabelLength: number)
   return 3;
 }
 
+function getMarginValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 function isTimestampLike(value: unknown): boolean {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return false;
@@ -81,6 +85,15 @@ function hasTimestampLikeX(data: unknown[] | undefined): boolean {
   return false;
 }
 
+function stripFixedLayoutSize(layout: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!layout) {
+    return {};
+  }
+
+  const { width, height, ...rest } = layout;
+  return rest;
+}
+
 export function PlotlyFigureChart({
   figure,
   mode = "original",
@@ -106,12 +119,14 @@ export function PlotlyFigureChart({
       return nextTrace;
     });
 
+    const baseLayout =
+      figure.layout && typeof figure.layout === "object"
+        ? { ...figure.layout }
+        : undefined;
+
     return {
       data: clonedData,
-      layout:
-        figure.layout && typeof figure.layout === "object"
-          ? { ...figure.layout }
-          : undefined,
+      layout: baseLayout,
       frames: Array.isArray(figure.frames) ? [...figure.frames] : figure.frames,
       config:
         figure.config && typeof figure.config === "object"
@@ -148,20 +163,45 @@ export function PlotlyFigureChart({
   );
 
   const useVerticalLegend = traceCount >= 6 || (traceCount >= 4 && avgLegendLabelLength >= 22);
+  const hasSecondaryYAxis = Boolean(
+    preparedFigure.layout &&
+      typeof (preparedFigure.layout as { yaxis2?: unknown }).yaxis2 === "object"
+  );
+  const normalizedLayout = stripFixedLayoutSize(
+    preparedFigure.layout as Record<string, unknown> | undefined
+  );
   const legendRowsEstimate = getLegendRowsEstimate(traceCount, avgLegendLabelLength);
-  const topMargin = 56 + titleLineEstimate * 20 + (useVerticalLegend ? 8 : legendRowsEstimate * 18);
-  const rightMargin = useVerticalLegend ? 200 : 24;
+  const layoutMargin =
+    normalizedLayout &&
+    typeof (normalizedLayout as { margin?: unknown }).margin === "object"
+      ? ((normalizedLayout as { margin?: Record<string, unknown> }).margin ?? {})
+      : {};
+  const topMargin = 56 + titleLineEstimate * 20 + (useVerticalLegend ? 8 : legendRowsEstimate * 24);
+  const rightMargin = Math.max(
+    useVerticalLegend ? 232 : hasSecondaryYAxis ? 112 : 36,
+    getMarginValue((layoutMargin as { r?: unknown }).r)
+  );
+  const leftMargin = Math.max(40, getMarginValue((layoutMargin as { l?: unknown }).l));
+  const bottomMargin = Math.max(120, getMarginValue((layoutMargin as { b?: unknown }).b));
+  const resolvedTopMargin = Math.max(
+    topMargin,
+    getMarginValue((layoutMargin as { t?: unknown }).t)
+  );
+  const boundedTopMargin = Math.min(resolvedTopMargin, 176);
+  const boundedBottomMargin = Math.min(bottomMargin, 124);
+  const boundedRightMargin = Math.min(rightMargin, useVerticalLegend ? 280 : 168);
+  const boundedLeftMargin = Math.min(leftMargin, 72);
+  const legendEntryWidth = Math.max(120, Math.min(260, avgLegendLabelLength * 8));
 
   const layout = useMemo(
     () => ({
       autosize: true,
-      margin: { l: 28, r: rightMargin, t: topMargin, b: 72 },
-      ...(preparedFigure.layout ?? {}),
+      ...normalizedLayout,
       ...(forceDateAxis
         ? {
             xaxis: {
-              ...(typeof (preparedFigure.layout as any)?.xaxis === "object"
-                ? (preparedFigure.layout as any).xaxis
+              ...(typeof (normalizedLayout as any)?.xaxis === "object"
+                ? (normalizedLayout as any).xaxis
                 : {}),
               type: "date",
             },
@@ -178,8 +218,8 @@ export function PlotlyFigureChart({
               size: 13,
             },
             title: {
-              ...(typeof (preparedFigure.layout as any)?.title === "object"
-                ? (preparedFigure.layout as any).title
+              ...(typeof (normalizedLayout as any)?.title === "object"
+                ? (normalizedLayout as any).title
                 : {}),
               automargin: true,
               x: 0,
@@ -188,45 +228,90 @@ export function PlotlyFigureChart({
               yanchor: "top",
             },
             xaxis: {
-              ...(typeof (preparedFigure.layout as any)?.xaxis === "object"
-                ? (preparedFigure.layout as any).xaxis
+              ...(typeof (normalizedLayout as any)?.xaxis === "object"
+                ? (normalizedLayout as any).xaxis
                 : {}),
               automargin: true,
               title: {
-                ...(typeof (preparedFigure.layout as any)?.xaxis?.title === "object"
-                  ? (preparedFigure.layout as any).xaxis.title
+                ...(typeof (normalizedLayout as any)?.xaxis?.title === "object"
+                  ? (normalizedLayout as any).xaxis.title
                   : {}),
                 standoff: 10,
               },
             },
             yaxis: {
-              ...(typeof (preparedFigure.layout as any)?.yaxis === "object"
-                ? (preparedFigure.layout as any).yaxis
+              ...(typeof (normalizedLayout as any)?.yaxis === "object"
+                ? (normalizedLayout as any).yaxis
                 : {}),
               automargin: true,
               title: {
-                ...(typeof (preparedFigure.layout as any)?.yaxis?.title === "object"
-                  ? (preparedFigure.layout as any).yaxis.title
+                ...(typeof (normalizedLayout as any)?.yaxis?.title === "object"
+                  ? (normalizedLayout as any).yaxis.title
                   : {}),
                 standoff: 10,
               },
             },
+            ...(hasSecondaryYAxis
+              ? {
+                  yaxis2: {
+                    ...(typeof (normalizedLayout as any)?.yaxis2 === "object"
+                      ? (normalizedLayout as any).yaxis2
+                      : {}),
+                    automargin: true,
+                    title: {
+                      ...(typeof (normalizedLayout as any)?.yaxis2?.title === "object"
+                        ? (normalizedLayout as any).yaxis2.title
+                        : {}),
+                      standoff: 8,
+                    },
+                  },
+                }
+              : {}),
             legend: {
-              ...(typeof (preparedFigure.layout as any)?.legend === "object"
-                ? (preparedFigure.layout as any).legend
+              ...(typeof (normalizedLayout as any)?.legend === "object"
+                ? (normalizedLayout as any).legend
                 : {}),
-              orientation: useVerticalLegend ? "v" : "h",
-              x: useVerticalLegend ? 1.02 : 0,
-              y: useVerticalLegend ? 1 : 1.08,
-              xanchor: useVerticalLegend ? "left" : "left",
-              yanchor: useVerticalLegend ? "top" : "bottom",
+              ...(useVerticalLegend
+                ? {
+                    orientation: "v",
+                    x: 1.02,
+                    y: 1,
+                    xanchor: "left",
+                    yanchor: "top",
+                  }
+                : {
+                    orientation: "h",
+                    x: 0,
+                    y: 1.1,
+                    xanchor: "left",
+                    yanchor: "bottom",
+                    entrywidthmode: "pixels",
+                    entrywidth: legendEntryWidth,
+                  }),
               bgcolor: "rgba(255,255,255,0.0)",
               borderwidth: 0,
             },
           }
         : {}),
+      margin: {
+        l: boundedLeftMargin,
+        r: boundedRightMargin,
+        t: boundedTopMargin,
+        b: boundedBottomMargin,
+      },
     }),
-    [preparedFigure.layout, forceDateAxis, isNormalized, rightMargin, topMargin, useVerticalLegend]
+    [
+      normalizedLayout,
+      forceDateAxis,
+      isNormalized,
+      boundedLeftMargin,
+      boundedRightMargin,
+      boundedTopMargin,
+      boundedBottomMargin,
+      useVerticalLegend,
+      legendEntryWidth,
+      hasSecondaryYAxis,
+    ]
   );
 
   const config = useMemo(
@@ -248,14 +333,14 @@ export function PlotlyFigureChart({
   const PlotComponent = Plot as any;
 
   return (
-    <div className="min-w-0 rounded-xl border bg-card/50 p-3">
-      <div className="h-[320px] w-full sm:h-[380px] lg:h-[460px]">
+    <div className="min-w-0 overflow-hidden rounded-xl border bg-card/50 p-3">
+      <div className="h-[360px] w-full overflow-hidden sm:h-[430px] lg:h-[520px]">
         <PlotComponent
           config={config}
           data={preparedFigure.data}
           frames={preparedFigure.frames}
           layout={layout}
-          style={{ height: "100%", width: "100%" }}
+          style={{ height: "100%", maxWidth: "100%", width: "100%" }}
           useResizeHandler
         />
       </div>

@@ -147,6 +147,7 @@ export function SidebarHistory({
       // Always revalidate client-side so history uses browser auth headers.
       revalidateFirstPage: true,
       revalidateOnFocus: false,
+      refreshInterval: 30000,
     }
   );
 
@@ -262,12 +263,17 @@ export function SidebarHistory({
   }
 
   if (hasEmptyChatHistory) {
+    const normalizedSearchQuery = searchQuery.trim();
+    const hasActiveSearch = normalizedSearchQuery.length >= 2;
+
     return (
       <>
         {searchInputElement}
         <SidebarGroup>
           <div className="px-2 py-1 text-sidebar-foreground/50 text-xs">
-            No chats yet
+            {hasActiveSearch
+              ? "No conversations match your search"
+              : "No chats yet"}
           </div>
         </SidebarGroup>
       </>
