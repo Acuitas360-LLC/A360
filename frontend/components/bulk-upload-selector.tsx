@@ -81,6 +81,11 @@ export function BulkUploadSelector({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canRun = headers.length > 0 && Boolean(mapping.questionColumn);
+  const questionCount = mapping.questionColumn
+    ? csvRows
+        .map((row) => String(row[mapping.questionColumn] ?? "").trim())
+        .filter((value) => value.length > 0).length
+    : 0;
 
   const resetState = () => {
     setFileName("");
@@ -240,15 +245,15 @@ export function BulkUploadSelector({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden p-0">
-        <DialogHeader className="border-b px-6 pt-6 pb-4">
+      <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-3xl flex-col overflow-hidden border-border/70 bg-background p-0 shadow-2xl">
+        <DialogHeader className="border-b border-border/70 bg-gradient-to-r from-slate-50 via-blue-50/40 to-cyan-50/30 px-6 pt-6 pb-4 dark:from-slate-950 dark:via-blue-950/20 dark:to-cyan-950/20">
           <DialogTitle>Bulk Question Upload</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-muted-foreground/90">
             Upload a CSV or XLSX, select one column to run, and start batch execution.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 overflow-y-auto px-6 py-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-gradient-to-b from-background to-muted/20 px-6 py-5">
           <input
             accept=".csv,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="hidden"
@@ -265,77 +270,96 @@ export function BulkUploadSelector({
           {headers.length === 0 ? (
             <div className="space-y-4">
               <button
-                className="flex w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 px-6 py-10 text-center transition-colors hover:bg-muted/50"
+                className="group flex w-full cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/80 bg-gradient-to-br from-muted/30 via-muted/20 to-cyan-100/20 px-6 py-12 text-center transition-all duration-200 hover:border-cyan-400/60 hover:from-cyan-100/30 hover:to-blue-100/40 hover:shadow-lg hover:shadow-cyan-100/50 dark:hover:shadow-cyan-900/20"
                 onClick={() => fileInputRef.current?.click()}
                 type="button"
               >
-                <UploadIcon size={20} />
-                <div>
-                  <p className="font-medium">Choose CSV or XLSX file</p>
-                  <p className="text-sm text-muted-foreground">
+                <div className="rounded-full border border-border/70 bg-background/80 p-3 shadow-sm transition-transform duration-200 group-hover:-translate-y-0.5">
+                  <UploadIcon size={20} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold tracking-tight">Choose CSV or XLSX file</p>
+                  <p className="text-sm text-muted-foreground/90">
                     Click to browse. First row should contain column names.
                   </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <span className="rounded-full border bg-background/80 px-2.5 py-1">CSV</span>
+                  <span className="rounded-full border bg-background/80 px-2.5 py-1">XLSX</span>
+                  <span className="rounded-full border bg-background/80 px-2.5 py-1">Header row required</span>
                 </div>
               </button>
 
               {isParsing && (
-                <p className="text-sm text-muted-foreground">Reading and validating file...</p>
+                <p className="animate-pulse text-sm text-muted-foreground">Reading and validating file...</p>
               )}
             </div>
           ) : (
             <div className="space-y-5">
-              <div className="rounded-lg border bg-muted/20 p-3 text-sm">
-                <p className="font-medium">{fileName}</p>
-                <p className="text-muted-foreground">
-                  {rowCount} rows • {headers.length} columns
-                </p>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border bg-background/80 p-3 shadow-sm md:col-span-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Selected File</p>
+                  <p className="mt-1 truncate text-sm font-semibold">{fileName}</p>
+                </div>
+                <div className="rounded-xl border bg-background/80 p-3 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Dataset Size</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {rowCount} rows • {headers.length} cols
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <p className="text-sm font-medium">
-                  Select column to run <span className="text-destructive">*</span>
-                </p>
-                <Select
-                  onValueChange={(value) => setMapping({ questionColumn: value })}
-                  value={mapping.questionColumn || ""}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select one column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {headers.map((header) => (
-                      <SelectItem key={header} value={header}>
-                        {header}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!mapping.questionColumn && (
-                  <p className="text-xs text-destructive">Select one column before starting</p>
-                )}
-                {mapping.questionColumn && (
-                  <p className="text-xs text-muted-foreground">
-                    Total Questions Found: {
-                      csvRows
-                        .map((row) => String(row[mapping.questionColumn] ?? "").trim())
-                        .filter((value) => value.length > 0).length
-                    }
+              <div className="rounded-xl border bg-background/80 p-4 shadow-sm">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    Select column to run <span className="text-destructive">*</span>
                   </p>
-                )}
+                  <Select
+                    onValueChange={(value) => setMapping({ questionColumn: value })}
+                    value={mapping.questionColumn || ""}
+                  >
+                    <SelectTrigger className="bg-background">
+                      <SelectValue placeholder="Select one column" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {headers.map((header) => (
+                        <SelectItem key={header} value={header}>
+                          {header}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!mapping.questionColumn && (
+                    <p className="text-xs text-destructive">Select one column before starting</p>
+                  )}
+                  {mapping.questionColumn && (
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                      Total Questions Found: {questionCount}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-end">
-                <Button onClick={() => fileInputRef.current?.click()} type="button" variant="outline">
+                <Button
+                  className="shadow-sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  type="button"
+                  variant="outline"
+                >
                   Choose Another File
                 </Button>
               </div>
 
               {previewRows.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Preview (first 5 rows)</p>
-                  <div className="overflow-x-auto rounded-lg border">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">Preview (first 5 rows)</p>
+                    <p className="text-xs text-muted-foreground">Read-only preview</p>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border bg-background/80 shadow-sm">
                     <table className="min-w-full text-left text-xs">
-                      <thead className="bg-muted/50">
+                      <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur-sm">
                         <tr>
                           {headers.map((header) => (
                             <th className="border-b px-3 py-2 font-medium" key={header}>
@@ -346,10 +370,7 @@ export function BulkUploadSelector({
                       </thead>
                       <tbody>
                         {previewRows.map((row, rowIndex) => (
-                          <tr
-                            className="odd:bg-background even:bg-muted/20"
-                            key={`preview-row-${rowIndex}`}
-                          >
+                          <tr className="odd:bg-background even:bg-muted/20" key={`preview-row-${rowIndex}`}>
                             {headers.map((header) => (
                               <td className="max-w-[220px] truncate px-3 py-2" key={`${rowIndex}-${header}`}>
                                 {row[header] || "-"}
@@ -366,13 +387,13 @@ export function BulkUploadSelector({
           )}
         </div>
 
-        <DialogFooter className="border-t px-6 py-4">
+        <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 backdrop-blur">
           <div className="flex w-full items-center justify-between gap-2">
             <Button onClick={() => handleDialogOpenChange(false)} variant="outline">
               Cancel
             </Button>
 
-            <Button disabled={!canRun} onClick={runBulkUpload}>
+            <Button className="min-w-32 shadow-sm" disabled={!canRun} onClick={runBulkUpload}>
               Start Batch Run
             </Button>
           </div>

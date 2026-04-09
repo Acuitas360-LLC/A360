@@ -25,32 +25,38 @@ const STARTER_QUESTION_CATEGORIES: readonly StarterCategory[] = [
     id: "nation",
     label: "Nation",
     questions: [
+
       "How are sales trending?",
       "Are we seeing strong short-term sales momentum?",
-      "How is the sales performance in the recent  quarter?",
+      "How is sales performance in the recent quarter?",
       "How has our sales performance evolved over the past year?",
-      "Is Rytelo gaining or losing share?"
+      "Is Relmora gaining or losing market share?"
+
     ],
   },
   {
     id: "geography",
     label: "Geography",
     questions: [
-      "Which regions are growing and which are slowing down?",
-      "How does new account addition look like across regions?",
-      "How does account adoption look like across regions?",
-      "In which regions is Rytelo gaining or losing share?",
-     ],
+
+      "Which regions are growing, and which are slowing down ?",
+      "How do new account additions look across regions?",
+      "How does account adoption look across regions?",
+      "In which regions is Relmora gaining or losing market share?",
+
+    ],
   },
-  
+
   {
     id: "childAccounts",
     label: "Campus Accounts",
     questions: [
-      "How does new account addition look like by tier type?",
-      "How does our breadth look like",
-      "How are we doing in terms of adding new businesses?",
-      "How does account adoption look like within target campuses across campus_tier?"
+
+      "How do new account additions look by tier type?",
+      "How does our breadth look?",
+      "How are we performing in terms of adding new businesses?",
+      "How does account adoption look within target campuses across campus tiers?",
+
     ],
   },
 ];
@@ -70,9 +76,9 @@ function PureSuggestedActions({
       !selectedCategoryId
         ? null
         :
-      STARTER_QUESTION_CATEGORIES.find(
-        (category) => category.id === selectedCategoryId
-      ) ?? null,
+        STARTER_QUESTION_CATEGORIES.find(
+          (category) => category.id === selectedCategoryId
+        ) ?? null,
     [selectedCategoryId]
   );
 

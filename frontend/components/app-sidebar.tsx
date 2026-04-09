@@ -1,5 +1,6 @@
-"use client";
+  "use client";
 
+  import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -83,14 +84,18 @@ export function AppSidebar({
       <Sidebar className="group-data-[side=left]:border-r-0">
         <SidebarHeader>
           <SidebarMenu>
-            <div className="flex flex-row items-center justify-between">
-              <span className="flex flex-row items-center gap-3">
-                <span className="rounded-md px-2 py-2 font-semibold text-2xl text-primary">
-                  <span style={{ color: "#314349" }}>A</span>
-                  <span style={{ color: "#ef6e0f" }}>360</span>
-                </span>
+            <div className="flex min-h-14 flex-row items-center justify-between">
+              <span className="flex h-full flex-row items-center">
+                <Image
+                  src="/images/a360_sidebar.png"
+                  alt="A360 logo"
+                  width={156}
+                  height={48}
+                  className="h-11 w-auto md:h-12"
+                  priority
+                />
               </span>
-              <div className="flex flex-row gap-1">
+              <div className="flex h-full flex-row items-center gap-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button

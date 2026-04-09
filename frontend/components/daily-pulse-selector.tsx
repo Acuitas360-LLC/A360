@@ -174,35 +174,39 @@ export function DailyPulseSelector({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col overflow-hidden p-0">
-        <DialogHeader className="border-b px-6 pt-6 pb-4 text-left">
+      <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-3xl flex-col overflow-hidden border-border/70 bg-background p-0 shadow-2xl">
+        <DialogHeader className="border-b border-border/70 bg-gradient-to-r from-slate-50 via-blue-50/40 to-cyan-50/30 px-6 pt-6 pb-4 text-left dark:from-slate-950 dark:via-blue-950/20 dark:to-cyan-950/20">
           <DialogTitle>Daily Pulse Questions</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-muted-foreground/90">
             Review and edit FAQ questions, then run them one by one.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-6 py-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-gradient-to-b from-background to-muted/20 px-6 py-5">
           {isLoading ? (
-            <div className="rounded-lg border bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-xl border bg-background/80 px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
               Loading FAQ questions...
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2 text-sm">
-                <span className="font-medium">Questions ready to run</span>
-                <span className="font-medium text-muted-foreground">{nonEmptyCount}</span>
+              <div className="flex items-center justify-between rounded-xl border bg-background/80 px-4 py-3 text-sm shadow-sm">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Questions ready to run
+                </span>
+                <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                  {nonEmptyCount}
+                </span>
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col rounded-lg border bg-background p-3">
-                <div className="min-h-0 max-h-[45vh] space-y-2 overflow-y-auto pb-1 pr-1">
+              <div className="flex min-h-0 flex-1 flex-col rounded-xl border bg-background/85 p-3 shadow-sm">
+                <div className="min-h-0 max-h-[48vh] space-y-2 overflow-y-auto pb-1 pr-1">
                   {questions.map((question, index) => (
                     <div
-                      className="flex items-center gap-2"
+                      className="flex items-center gap-2 rounded-lg border border-transparent bg-muted/20 px-2 py-2 transition-colors hover:border-border/70 hover:bg-muted/35"
                       key={`daily-pulse-question-${index}`}
                     >
                       <Input
-                        className="h-10 focus-visible:border-ring focus-visible:ring-0 focus-visible:ring-offset-0"
+                        className="h-10 bg-background focus-visible:border-ring focus-visible:ring-0 focus-visible:ring-offset-0"
                         onChange={(event) => setQuestionAt(index, event.target.value)}
                         placeholder={`Question ${index + 1}`}
                         value={question}
@@ -221,7 +225,7 @@ export function DailyPulseSelector({
               </div>
 
               <div className="flex justify-start">
-                <Button className="h-9" onClick={addQuestion} type="button" variant="outline">
+                <Button className="h-9 shadow-sm" onClick={addQuestion} type="button" variant="outline">
                   Add Question
                 </Button>
               </div>
@@ -229,7 +233,7 @@ export function DailyPulseSelector({
           )}
         </div>
 
-        <DialogFooter className="border-t bg-background/95 px-6 py-4">
+        <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 backdrop-blur">
           <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Button
               className="w-full sm:w-auto"
@@ -244,7 +248,7 @@ export function DailyPulseSelector({
 
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
               <Button
-                className="w-full sm:w-auto"
+                className="w-full shadow-sm sm:w-auto"
                 disabled={isLoading || isSaving}
                 onClick={saveOnly}
                 type="button"
@@ -254,7 +258,7 @@ export function DailyPulseSelector({
               </Button>
 
               <Button
-                className="w-full sm:w-auto"
+                className="w-full min-w-32 shadow-sm sm:w-auto"
                 disabled={isLoading || isSaving}
                 onClick={saveAndRun}
                 type="button"
