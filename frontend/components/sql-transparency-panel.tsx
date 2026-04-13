@@ -107,6 +107,9 @@ export function SQLTransparencyPanel({
   const isSummaryStageCompleted = normalizedProgressStages.some(
     (stage) => stage.key === "rendering_summary" && stage.state === "completed"
   );
+  const hasSummaryStageSignal = normalizedProgressStages.some(
+    (stage) => stage.key === "rendering_summary"
+  );
   const isPreparingResultTable = normalizedProgressStages.some(
     (stage) => stage.state === "active" && stage.key === "preparing_result_table"
   );
@@ -134,6 +137,9 @@ export function SQLTransparencyPanel({
     isSummaryStageCompleted ||
     (!showResultSummary &&
       (hasTableReady || Boolean(visualizationFigure) || Boolean(relevantQuestions?.length)));
+  const showAnalysisDetailsHeading = hasSummaryStageSignal
+    ? isSummaryStageCompleted
+    : hasSummaryVisible;
   const canStartTablePhase = isSummaryPhaseComplete;
   const shouldShowTableContent =
     canStartTablePhase && hasTableReady && showTableContent;
@@ -323,9 +329,11 @@ export function SQLTransparencyPanel({
 
   return (
     <div className="response-section mb-3 w-full">
-      <div className="mb-3 flex items-center justify-between">
-        <h4 className="font-semibold text-base tracking-tight">Analysis Details</h4>
-      </div>
+      {showAnalysisDetailsHeading && (
+        <div className="mb-3 flex items-center justify-between">
+          <h4 className="font-semibold text-base tracking-tight">Analysis Details</h4>
+        </div>
+      )}
 
       {showResultSummary && resultSummary && (
         <div className="response-section mb-3">

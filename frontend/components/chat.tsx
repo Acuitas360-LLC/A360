@@ -19,14 +19,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   AUTH_TOKEN_UPDATED_EVENT,
-  getStoredIdToken,
-  withBrowserAuthHeaders,
 } from "@/lib/iframe-auth";
 import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import type { Chat, Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import { useStreamingStore } from "@/lib/streaming-store";
+import {
+  getCachedThreadMessages,
+  prefetchThreadMessages,
+} from "@/lib/thread-history-client";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Artifact } from "./artifact";
@@ -694,6 +696,7 @@ export function Chat({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
   const isInitialHomeState = messages.length === 0;
+  const [isHydratingHistory, setIsHydratingHistory] = useState(false);
   const [historyHydrationTick, setHistoryHydrationTick] = useState(0);
 
   useEffect(() => {
@@ -712,10 +715,16 @@ export function Chat({
 
   useEffect(() => {
     if (isNewThreadParam || initialMessages.length > 0 || messages.length > 0) {
+      setIsHydratingHistory(false);
       return;
     }
 
-    if (!getStoredIdToken()) {
+    setIsHydratingHistory(true);
+
+    const cachedMessages = getCachedThreadMessages(id);
+    if (cachedMessages && cachedMessages.length > 0) {
+      setMessages(cachedMessages);
+      setIsHydratingHistory(false);
       return;
     }
 
@@ -723,25 +732,19 @@ export function Chat({
 
     const hydrateHistory = async () => {
       try {
-        const response = await fetch(`/api/history/${encodeURIComponent(id)}`, {
-          cache: "no-store",
-          headers: withBrowserAuthHeaders(),
+        const hydratedMessages = await prefetchThreadMessages(id, {
+          force: true,
         });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const payload = (await response.json()) as { messages?: ChatMessage[] };
-        const hydratedMessages = Array.isArray(payload.messages)
-          ? payload.messages
-          : [];
 
         if (active && hydratedMessages.length > 0) {
           setMessages(hydratedMessages);
         }
       } catch {
         // Keep UI responsive; chat can still continue with new messages.
+      } finally {
+        if (active) {
+          setIsHydratingHistory(false);
+        }
       }
     };
 
@@ -781,7 +784,7 @@ export function Chat({
           chatId={id}
           submitSequence={submitSequence}
           initialInputSlot={
-            isInitialHomeState && !isReadonly ? (
+            isInitialHomeState && !isReadonly && !isHydratingHistory ? (
               <div className="mx-auto mt-5 w-full max-w-5xl px-2 md:mt-6 md:px-4">
                 <MultimodalInput
                   attachments={attachments}
@@ -815,6 +818,7 @@ export function Chat({
           selectedVisibilityType={visibilityType}
           setMessages={setMessages}
           status={effectiveStatus}
+          isHydratingHistory={isHydratingHistory}
           votes={votes}
         />
 

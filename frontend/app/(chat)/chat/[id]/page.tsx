@@ -36,7 +36,19 @@ export default function Page(props: {
   searchParams: Promise<{ new?: string }>;
 }) {
   return (
-    <Suspense fallback={<div className="flex h-dvh" />}>
+    <Suspense
+      fallback={
+        <div className="flex h-dvh min-w-0 flex-col bg-background">
+          <div className="h-14 border-b bg-background" />
+          <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
+            <div className="h-6 w-40 animate-pulse rounded bg-muted/50" />
+            <div className="h-16 w-full animate-pulse rounded-xl bg-muted/40" />
+            <div className="h-16 w-[88%] animate-pulse rounded-xl bg-muted/35" />
+            <div className="h-16 w-[92%] animate-pulse rounded-xl bg-muted/30" />
+          </div>
+        </div>
+      }
+    >
       <ChatPage params={props.params} searchParams={props.searchParams} />
     </Suspense>
   );

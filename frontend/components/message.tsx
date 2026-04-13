@@ -1,6 +1,6 @@
 "use client";
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnalyticsInsight } from "@/components/analytics-demo";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
@@ -28,6 +28,28 @@ import { Weather } from "./weather";
 
 const ANALYTICS_RESPONSE_MARKER = "[[ANALYTICS_52_WEEKS_RESPONSE]]";
 const ERROR_RESPONSE_MARKER = "[[ERROR_RESPONSE]]";
+
+const STAGE_LABELS_BY_KEY: Record<string, string> = {
+  analyzing: "Thinking",
+  analyzing_data: "Analyzing query intent",
+  generating_sql: "Generating SQL",
+  fetching_results: "Fetching results",
+  rendering_summary: "Summarizing results",
+  preparing_result_table: "Preparing result table",
+  generating_visualization: "Generating visualization",
+  complete: "Finalizing response",
+};
+
+const TIMELINE_STAGE_ORDER = [
+  "analyzing",
+  "analyzing_data",
+  "generating_sql",
+  "fetching_results",
+  "rendering_summary",
+  "preparing_result_table",
+  "generating_visualization",
+  "complete",
+];
 
 const PurePreviewMessage = ({
   addToolApprovalResponse,
@@ -605,7 +627,163 @@ const PurePreviewMessage = ({
 
 export const PreviewMessage = PurePreviewMessage;
 
-export const ThinkingMessage = () => {
+export const ThinkingMessage = ({
+  progressStages = [],
+}: {
+  progressStages?: Array<{
+    key?: string;
+    label?: string;
+    state?: string;
+  }>;
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [dotStep, setDotStep] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setDotStep((step) => (step + 1) % 3);
+    }, 360);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const getStageLabel = (stage: {
+    key?: string;
+    label?: string;
+    state?: string;
+  }) => {
+    const key = stage.key?.trim();
+    if (key) {
+      const mappedLabel = STAGE_LABELS_BY_KEY[key];
+      if (mappedLabel) {
+        return mappedLabel;
+      }
+    }
+
+    const label = stage.label?.trim();
+    if (label) {
+      return label;
+    }
+
+    return key ?? "";
+  };
+
+  const normalizedStageMap = new Map<
+    string,
+    {
+      key: string;
+      label: string;
+      state: string;
+    }
+  >();
+
+  for (const stage of progressStages) {
+    const key = stage.key?.trim();
+    if (!key) {
+      continue;
+    }
+
+    normalizedStageMap.set(key, {
+      key,
+      label: getStageLabel(stage) || key,
+      state: (stage.state || "pending").trim().toLowerCase(),
+    });
+  }
+
+  const unknownStageKeys = Array.from(normalizedStageMap.keys()).filter(
+    (key) => !TIMELINE_STAGE_ORDER.includes(key)
+  );
+
+  const allTimelineStages = [
+    ...TIMELINE_STAGE_ORDER.map((key) => {
+      const mapped = normalizedStageMap.get(key);
+      if (mapped) {
+        return mapped;
+      }
+
+      return {
+        key,
+        label: STAGE_LABELS_BY_KEY[key] ?? key,
+        state: "pending",
+      };
+    }),
+    ...unknownStageKeys
+      .map((key) => normalizedStageMap.get(key))
+      .filter(
+        (
+          stage
+        ): stage is {
+          key: string;
+          label: string;
+          state: string;
+        } => Boolean(stage)
+      ),
+  ];
+
+  const failedStageIndex = allTimelineStages.findIndex(
+    (stage) => stage.state === "failed" || stage.state === "error"
+  );
+
+  let lastActiveStageIndex = -1;
+  for (let index = allTimelineStages.length - 1; index >= 0; index -= 1) {
+    if (allTimelineStages[index]?.state === "active") {
+      lastActiveStageIndex = index;
+      break;
+    }
+  }
+
+  const activeStageIndex =
+    failedStageIndex >= 0
+      ? failedStageIndex
+      : lastActiveStageIndex;
+
+  const latestCompletedIndex = allTimelineStages.reduce((lastIndex, stage, index) => {
+    if (stage.state === "completed" || stage.state === "success") {
+      return index;
+    }
+
+    return lastIndex;
+  }, -1);
+
+  const currentStageIndex =
+    activeStageIndex >= 0
+      ? activeStageIndex
+      : latestCompletedIndex >= 0
+        ? latestCompletedIndex
+        : 0;
+
+  const timelineStages =
+    allTimelineStages.length > 0
+      ? allTimelineStages.slice(0, currentStageIndex + 1)
+      : [
+          {
+            key: "thinking",
+            label: "Thinking",
+            state: "active",
+          },
+        ];
+
+  const completedStageCount = timelineStages.filter(
+    (stage) => stage.state === "completed" || stage.state === "success"
+  ).length;
+
+  const currentStage = timelineStages[currentStageIndex] || timelineStages[0];
+  const currentState =
+    failedStageIndex >= 0
+      ? "failed"
+      : currentStage?.state === "completed" || currentStage?.state === "success"
+        ? "completed"
+        : "active";
+
+  const activeLabel =
+    currentState === "failed"
+      ? `Failed at ${currentStage?.label || "current stage"}`
+      : currentStage?.label || "Thinking";
+
+  const activeDots = ".".repeat(dotStep + 1);
+
   return (
     <div
       className="group/message fade-in w-full animate-in duration-300"
@@ -620,14 +798,82 @@ export const ThinkingMessage = () => {
         </div>
 
         <div className="response-shell flex min-w-0 w-full flex-col gap-2 md:gap-4">
-          <div className="flex items-center gap-1 p-0 text-muted-foreground text-sm">
-            <span className="animate-pulse">Thinking</span>
-            <span className="inline-flex">
-              <span className="animate-bounce [animation-delay:0ms]">.</span>
-              <span className="animate-bounce [animation-delay:150ms]">.</span>
-              <span className="animate-bounce [animation-delay:300ms]">.</span>
+          <button
+            aria-expanded={isExpanded}
+            className="flex w-full items-center justify-between rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-left transition-colors hover:bg-muted/35"
+            onClick={() => setIsExpanded((expanded) => !expanded)}
+            type="button"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <span
+                className={cn("size-2.5 shrink-0 rounded-full", {
+                  "animate-pulse bg-red-500": currentState === "failed",
+                  "animate-pulse bg-primary": currentState === "active",
+                  "bg-muted-foreground/40": currentState === "completed",
+                })}
+              />
+              <span
+                className={cn("truncate text-sm", {
+                  "font-medium text-red-600 dark:text-red-400": currentState === "failed",
+                  "animate-pulse font-semibold text-foreground": currentState === "active",
+                  "text-muted-foreground": currentState === "completed",
+                })}
+              >
+                {activeLabel}
+                {currentState === "active" && (
+                  <span className="ml-1 text-muted-foreground/80">{activeDots}</span>
+                )}
+              </span>
             </span>
-          </div>
+
+            <span className="flex shrink-0 items-center gap-2 text-muted-foreground text-xs">
+              <span>{isExpanded ? "Hide" : "Show"} steps</span>
+            </span>
+          </button>
+
+          {isExpanded && (
+            <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2">
+              <ol className="space-y-2">
+                {timelineStages.map((stage, index) => {
+                  const isFailed = stage.state === "failed" || stage.state === "error";
+                  const isCompleted = stage.state === "completed" || stage.state === "success";
+                  const isActive = !isFailed && index === currentStageIndex && currentState === "active";
+                  const isCurrentFailed = index === failedStageIndex;
+
+                  return (
+                    <li className="relative flex items-start gap-2" key={`${stage.key}-${index}`}>
+                      {index < timelineStages.length - 1 && (
+                        <span className="absolute left-[0.28rem] top-3 h-[calc(100%+0.5rem)] w-px bg-border/60" />
+                      )}
+
+                      <span
+                        className={cn("relative mt-1 size-2.5 shrink-0 rounded-full", {
+                          "bg-muted-foreground/35": !isActive && !isCompleted && !isCurrentFailed,
+                          "bg-muted-foreground/55": isCompleted,
+                          "animate-pulse bg-primary": isActive,
+                          "animate-pulse bg-red-500": isCurrentFailed || isFailed,
+                        })}
+                      />
+
+                      <span
+                        className={cn("text-sm", {
+                          "font-medium text-muted-foreground": isCompleted,
+                          "animate-pulse font-semibold text-foreground": isActive,
+                          "font-medium text-red-600 dark:text-red-400": isCurrentFailed || isFailed,
+                          "text-muted-foreground/70": !isActive && !isCompleted && !isCurrentFailed && !isFailed,
+                        })}
+                      >
+                        {stage.label}
+                        {isActive && (
+                          <span className="ml-1 text-muted-foreground/80">{activeDots}</span>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          )}
         </div>
       </div>
     </div>

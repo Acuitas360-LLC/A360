@@ -3,6 +3,7 @@ import { memo } from "react";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import type { Chat } from "@/lib/db/schema";
 import { useStreamingStore } from "@/lib/streaming-store";
+import { prefetchThreadMessages } from "@/lib/thread-history-client";
 import {
   CheckCircleFillIcon,
   GlobeIcon,
@@ -46,10 +47,33 @@ const PureChatItem = ({
     state.isChatRunning(chat.id)
   );
 
+  const triggerPrefetch = (source: "hover" | "focus" | "click") => {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[thread-prefetch] trigger", { chatId: chat.id, source });
+    }
+
+    void prefetchThreadMessages(chat.id);
+  };
+
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
-        <Link href={`/chat/${chat.id}`} onClick={() => setOpenMobile(false)}>
+        <Link
+          href={`/chat/${chat.id}`}
+          onClick={() => {
+            triggerPrefetch("click");
+            setOpenMobile(false);
+          }}
+          onFocus={() => {
+            triggerPrefetch("focus");
+          }}
+          onMouseEnter={() => {
+            triggerPrefetch("hover");
+          }}
+          onPointerEnter={() => {
+            triggerPrefetch("hover");
+          }}
+        >
           <div className="flex w-full min-w-0 items-center gap-2">
             <span className="truncate">{chat.title}</span>
             {isChatRunning ? (

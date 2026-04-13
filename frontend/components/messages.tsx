@@ -22,6 +22,7 @@ type MessagesProps = {
   isArtifactVisible: boolean;
   selectedModelId: string;
   selectedVisibilityType: VisibilityType;
+  isHydratingHistory: boolean;
   initialInputSlot?: ReactNode;
   onEditFailedResponse?: (errorMessageId: string) => void;
   onRetryFailedResponse?: (errorMessageId: string) => void;
@@ -43,6 +44,7 @@ function PureMessages({
   isReadonly,
   selectedModelId: _selectedModelId,
   selectedVisibilityType,
+  isHydratingHistory,
   initialInputSlot,
   onEditFailedResponse,
   onRetryFailedResponse,
@@ -215,6 +217,24 @@ function PureMessages({
           });
         });
 
+  const progressStagesForCurrentTurn =
+    typeof latestUserIndex === "number"
+      ? [...messages.slice(latestUserIndex + 1)]
+          .reverse()
+          .find((message) => message.role === "assistant")
+          ?.parts
+          .slice()
+          .reverse()
+          .find((part) => part.type === "data-progressStages")
+      : undefined;
+
+  const currentTurnProgressStages =
+    progressStagesForCurrentTurn &&
+    "data" in progressStagesForCurrentTurn &&
+    Array.isArray(progressStagesForCurrentTurn.data)
+      ? progressStagesForCurrentTurn.data
+      : [];
+
   const hasChartForCurrentTurn =
     typeof latestUserIndex === "number"
       ? messages.slice(latestUserIndex + 1).some((message) => {
@@ -314,7 +334,16 @@ function PureMessages({
         ref={messagesContainerRef}
       >
         <div className="mx-auto flex min-w-0 max-w-5xl flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
-          {messages.length === 0 && (
+          {isHydratingHistory && messages.length === 0 && (
+            <div className="flex flex-col gap-3 pt-2">
+              <div className="h-5 w-40 animate-pulse rounded bg-muted/50" />
+              <div className="h-14 w-full animate-pulse rounded-xl bg-muted/40" />
+              <div className="h-14 w-[90%] animate-pulse rounded-xl bg-muted/35" />
+              <div className="h-14 w-[86%] animate-pulse rounded-xl bg-muted/30" />
+            </div>
+          )}
+
+          {!isHydratingHistory && messages.length === 0 && (
             <>
               <Greeting />
               <div>{initialInputSlot}</div>
@@ -375,7 +404,9 @@ function PureMessages({
               msg.parts?.some(
                 (part) => "state" in part && part.state === "approval-responded"
               )
-            ) && <ThinkingMessage />}
+            ) && (
+              <ThinkingMessage progressStages={currentTurnProgressStages} />
+            )}
 
           <div
             className="min-h-[24px] min-w-[24px] shrink-0"
