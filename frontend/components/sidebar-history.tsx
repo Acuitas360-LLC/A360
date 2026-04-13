@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import type { User } from "@/lib/db/schema";
 import type { Chat } from "@/lib/db/schema";
-import { withBrowserAuthHeaders } from "@/lib/iframe-auth";
+import { AUTH_TOKEN_UPDATED_EVENT, withBrowserAuthHeaders } from "@/lib/iframe-auth";
 import { fetcher } from "@/lib/utils";
 import { LoaderIcon } from "./icons";
 import { ChatItem } from "./sidebar-history-item";
@@ -175,6 +175,20 @@ export function SidebarHistory({
 
     return () => clearTimeout(timeoutId);
   }, [searchInput, setSize]);
+
+  useEffect(() => {
+    const handleAuthTokenUpdate = () => {
+      mutate((chatHistories) => chatHistories, {
+        revalidate: true,
+      });
+    };
+
+    window.addEventListener(AUTH_TOKEN_UPDATED_EVENT, handleAuthTokenUpdate);
+
+    return () => {
+      window.removeEventListener(AUTH_TOKEN_UPDATED_EVENT, handleAuthTokenUpdate);
+    };
+  }, [mutate]);
 
   const hasReachedEnd = paginatedChatHistories
     ? paginatedChatHistories.some((page) => page.hasMore === false)

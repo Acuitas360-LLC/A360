@@ -1,44 +1,9 @@
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import Script from "next/script";
 import { Suspense } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
-import type { ChatHistory } from "@/components/sidebar-history";
 import { DataStreamProvider } from "@/components/data-stream-provider";
-import { withForwardedAuthHeaders } from "@/lib/server/auth-forward";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-
-const BACKEND_API_BASE_URL =
-  process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000";
-
-const SIDEBAR_HISTORY_TIMEOUT_MS = 1800;
-
-async function getInitialSidebarHistory(authHeaders?: HeadersInit): Promise<ChatHistory | undefined> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SIDEBAR_HISTORY_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(`${BACKEND_API_BASE_URL}/api/v1/history?limit=20`, {
-      cache: "no-store",
-      headers: authHeaders,
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      return undefined;
-    }
-
-    const payload = (await response.json()) as ChatHistory;
-    if (!Array.isArray(payload.chats) || typeof payload.hasMore !== "boolean") {
-      return undefined;
-    }
-
-    return payload;
-  } catch {
-    return undefined;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -57,16 +22,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 }
 
 async function SidebarWrapper({ children }: { children: React.ReactNode }) {
-  const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
-  const requestLike = new Request("http://localhost", { headers: requestHeaders });
-  const initialHistory = await getInitialSidebarHistory(
-    withForwardedAuthHeaders(requestLike)
-  );
+  const cookieStore = await cookies();
   const isCollapsed = cookieStore.get("sidebar_state")?.value === "false";
 
   return (
     <SidebarProvider defaultOpen={!isCollapsed}>
-      <AppSidebar initialHistory={initialHistory} user={undefined} />
+      <AppSidebar initialHistory={undefined} user={undefined} />
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
   );
