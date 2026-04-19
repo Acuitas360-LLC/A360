@@ -12,6 +12,53 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 
 const ERROR_RESPONSE_MARKER = "[[ERROR_RESPONSE]]";
+const RETRIABLE_VOTE_DELAYS_MS = [250, 500, 1000, 1500] as const;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+type VotePatchPayload = {
+  chatId: string;
+  messageId: string;
+  phase: "rating_only" | "feedback_only" | "enrich_only";
+  type: "up" | "down";
+  feedbackText?: string;
+  userQuery?: string;
+  assistantResponse?: string;
+};
+
+async function patchVoteWithRetry(payload: VotePatchPayload): Promise<Response> {
+  let lastDetail = "Vote save failed.";
+
+  for (const retryDelayMs of RETRIABLE_VOTE_DELAYS_MS) {
+    const response = await fetch("/api/vote", {
+      method: "PATCH",
+      headers: withBrowserAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      return response;
+    }
+
+    const body = (await response.json().catch(() => null)) as
+      | { retriable?: boolean; detail?: string }
+      | null;
+    lastDetail = body?.detail?.trim() || `Vote save failed (${response.status})`;
+
+    const retriable = response.status === 409 && Boolean(body?.retriable);
+    if (!retriable) {
+      throw new Error(lastDetail);
+    }
+
+    await delay(retryDelayMs);
+  }
+
+  throw new Error(lastDetail);
+}
 
 export function PureMessageActions({
   chatId,
@@ -30,7 +77,8 @@ export function PureMessageActions({
   previousUserQuery: string;
   onNegativeFeedbackRetry?: (
     originalUserQuery: string,
-    feedbackText: string
+    feedbackText: string,
+    downvotedMessageId: string
   ) => void;
 }) {
   const { mutate } = useSWRConfig();
@@ -130,25 +178,19 @@ export function PureMessageActions({
         data-testid="message-upvote"
         disabled={hasSubmittedFeedback}
         onClick={() => {
-          const upvote = fetch("/api/vote", {
-            method: "PATCH",
-            headers: withBrowserAuthHeaders(),
-            body: JSON.stringify({
-              chatId,
-              messageId: message.id,
-              type: "up",
-              userQuery: previousUserQuery,
-              assistantResponse: textFromParts,
-            }),
+          // Optimistic update so UI reflects the vote instantly.
+          persistVoteState(true);
+
+          const upvote = patchVoteWithRetry({
+            chatId,
+            messageId: message.id,
+            phase: "rating_only",
+            type: "up",
           });
 
           toast.promise(upvote, {
             loading: "Upvoting Response...",
-            success: () => {
-              persistVoteState(true);
-
-              return "Upvoted Response!";
-            },
+            success: () => "Upvoted Response!",
             error: "Failed to upvote response.",
           });
         }}
@@ -161,22 +203,19 @@ export function PureMessageActions({
         data-testid="message-downvote"
         disabled={hasSubmittedFeedback}
         onClick={() => {
-          const downvote = fetch("/api/vote", {
-            method: "PATCH",
-            headers: withBrowserAuthHeaders(),
-            body: JSON.stringify({
-              chatId,
-              messageId: message.id,
-              type: "down",
-              userQuery: previousUserQuery,
-              assistantResponse: textFromParts,
-            }),
+          // Optimistic update so UI reflects the vote instantly.
+          persistVoteState(false);
+
+          const downvote = patchVoteWithRetry({
+            chatId,
+            messageId: message.id,
+            phase: "rating_only",
+            type: "down",
           });
 
           toast.promise(downvote, {
             loading: "Downvoting Response...",
             success: () => {
-              persistVoteState(false);
               setShowDownvoteFeedback(true);
 
               return "Downvoted Response!";
@@ -210,26 +249,24 @@ export function PureMessageActions({
 
                 setIsSubmittingDownvoteFeedback(true);
                 try {
-                  const response = await fetch("/api/vote", {
-                    method: "PATCH",
-                    headers: withBrowserAuthHeaders(),
-                    body: JSON.stringify({
-                      chatId,
-                      messageId: message.id,
-                      type: "down",
-                      feedbackText: trimmed,
-                      userQuery: previousUserQuery,
-                      assistantResponse: textFromParts,
-                    }),
-                  });
-
-                  if (!response.ok) {
-                    throw new Error("Failed to save detailed feedback.");
-                  }
-
-                  onNegativeFeedbackRetry?.(previousUserQuery, trimmed);
+                  // Trigger feedback query immediately; persist feedback text in parallel.
+                  onNegativeFeedbackRetry?.(
+                    previousUserQuery,
+                    trimmed,
+                    message.id
+                  );
                   setShowDownvoteFeedback(false);
                   setFeedbackText("");
+
+                  const saveFeedbackPromise = patchVoteWithRetry({
+                    chatId,
+                    messageId: message.id,
+                    phase: "feedback_only",
+                    type: "down",
+                    feedbackText: trimmed,
+                  });
+
+                  await saveFeedbackPromise;
                   toast.success("Feedback saved. Retrying with your input.");
                 } catch {
                   toast.error("Failed to save feedback details.");

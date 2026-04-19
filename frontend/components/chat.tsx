@@ -150,8 +150,9 @@ export function Chat({
   const [failedPromptByErrorMessageId, setFailedPromptByErrorMessageId] =
     useState<Record<string, string>>({});
   const [pendingFeedbackRetry, setPendingFeedbackRetry] = useState<
-    { text: string } | null
+    { text: string; downvotedMessageId: string } | null
   >(null);
+  const pendingDownvotedMessageIdRef = useRef<string | null>(null);
   const currentModelIdRef = useRef(currentModelId);
   const activeRunChatIdRef = useRef(id);
   const activeRunIdRef = useRef<string | null>(null);
@@ -459,7 +460,7 @@ export function Chat({
 
   const sendMessageWithDemo = useCallback<typeof sendMessage>(
     (...args) => {
-      const [message] = args;
+      const [message, options] = args;
       if (!message) {
         return sendMessage(...args);
       }
@@ -508,7 +509,22 @@ export function Chat({
         return Promise.resolve(undefined as never);
       }
 
-      return sendMessage(...args);
+      const downvotedMessageId = pendingDownvotedMessageIdRef.current;
+      if (downvotedMessageId) {
+        pendingDownvotedMessageIdRef.current = null;
+      }
+
+      const nextOptions = downvotedMessageId
+        ? {
+            ...(options ?? {}),
+            body: {
+              ...((options as { body?: Record<string, unknown> } | undefined)?.body ?? {}),
+              downvoted_message_id: downvotedMessageId,
+            },
+          }
+        : options;
+
+      return sendMessage(message, nextOptions as Parameters<typeof sendMessage>[1]);
     },
     [beginRun, id, sendMessage, setMessages, stop]
   );
@@ -549,7 +565,7 @@ export function Chat({
   );
 
   const handleNegativeFeedbackRetry = useCallback(
-    (originalUserQuery: string, feedbackText: string) => {
+    (_originalUserQuery: string, feedbackText: string, downvotedMessageId: string) => {
       const feedback = feedbackText.trim();
 
       if (!feedback) {
@@ -560,9 +576,9 @@ export function Chat({
         return;
       }
 
-      setPendingFeedbackRetry({ text: feedback });
+      setPendingFeedbackRetry({ text: feedback, downvotedMessageId });
     },
-    [sendMessageWithDemo]
+    []
   );
 
   useEffect(() => {
@@ -574,11 +590,13 @@ export function Chat({
       return;
     }
 
-    const pending = pendingFeedbackRetry.text;
+    const pending = pendingFeedbackRetry;
     setPendingFeedbackRetry(null);
+    pendingDownvotedMessageIdRef.current = pending.downvotedMessageId;
+
     sendMessageWithDemo({
       role: "user",
-      parts: [{ type: "text", text: pending }],
+      parts: [{ type: "text", text: pending.text }],
     });
   }, [pendingFeedbackRetry, sendMessageWithDemo, status]);
 

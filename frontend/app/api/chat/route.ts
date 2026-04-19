@@ -210,10 +210,14 @@ export async function POST(req: Request) {
       id?: string;
       message?: RequestMessage;
       messages?: RequestMessage[];
+      downvoted_message_id?: string;
+      downvotedMessageId?: string;
     };
 
     const question = extractQuestion(body);
     const threadId = body.id?.trim();
+    const downvotedMessageId =
+      body.downvoted_message_id?.trim() || body.downvotedMessageId?.trim() || undefined;
 
     if (!question || !threadId) {
       return new ChatbotError("bad_request:api", "Missing question or thread id").toResponse();
@@ -224,7 +228,11 @@ export async function POST(req: Request) {
       headers: withForwardedAuthHeaders(req, {
         "Content-Type": "application/json",
       }),
-      body: JSON.stringify({ question, thread_id: threadId }),
+      body: JSON.stringify({
+        question,
+        thread_id: threadId,
+        downvoted_message_id: downvotedMessageId,
+      }),
       signal: req.signal,
     });
 

@@ -28,7 +28,8 @@ type MessagesProps = {
   onRetryFailedResponse?: (errorMessageId: string) => void;
   onNegativeFeedbackRetry?: (
     originalUserQuery: string,
-    feedbackText: string
+    feedbackText: string,
+    downvotedMessageId: string
   ) => void;
 };
 

@@ -83,7 +83,8 @@ const PurePreviewMessage = ({
   onRetryFailedResponse?: (errorMessageId: string) => void;
   onNegativeFeedbackRetry?: (
     originalUserQuery: string,
-    feedbackText: string
+    feedbackText: string,
+    downvotedMessageId: string
   ) => void;
   previousUserQuery: string;
 }) => {
