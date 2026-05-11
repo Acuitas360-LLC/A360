@@ -15,7 +15,7 @@ type SuggestedActionsProps = {
 };
 
 type StarterCategory = {
-  id: "nation" | "geography" | "parentAccounts" | "childAccounts";
+  id: "nation" | "geography" | "parentAccounts" | "childAccounts" | "calls";
   label: string;
   questions: readonly string[];
 };
@@ -57,6 +57,17 @@ const STARTER_QUESTION_CATEGORIES: readonly StarterCategory[] = [
       "How are we performing in terms of adding new businesses?",
       "How does account adoption look within target campuses across campus tiers?",
 
+    ],
+  },
+  {
+    id: "calls",
+    label: "Calls",
+    questions: [
+      "What is the reach across different regions?",
+      "What is the call frequency across different tiers?",
+      "What are the average calls per day across different regions?",
+      "What is the call effort across tiers by region?",
+      
     ],
   },
 ];
