@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as PptRequestBody;
   } catch {
-    return new ChatbotError("bad_request:ppt", "Invalid request body").toResponse();
+    return new ChatbotError("bad_request:api", "Invalid request body").toResponse();
   }
 
   const mode = body.mode?.trim();
@@ -25,11 +25,11 @@ export async function POST(request: Request) {
   const disposition = body.disposition?.trim();
 
   if (!threadId || (mode !== "slide" && mode !== "deck")) {
-    return new ChatbotError("bad_request:ppt", "Invalid PPT request").toResponse();
+    return new ChatbotError("bad_request:api", "Invalid PPT request").toResponse();
   }
 
   if (mode === "slide" && !messageId) {
-    return new ChatbotError("bad_request:ppt", "messageId is required").toResponse();
+    return new ChatbotError("bad_request:api", "messageId is required").toResponse();
   }
 
   const endpoint = mode === "slide" ? "/api/v1/pptx/slide" : "/api/v1/pptx/deck";
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     }
 
     return new ChatbotError(
-      "bad_request:ppt",
+      "bad_request:api",
       backendDetail || "PPT generation failed"
     ).toResponse();
   }

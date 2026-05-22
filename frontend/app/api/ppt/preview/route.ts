@@ -14,20 +14,14 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as PreviewRequestBody;
   } catch {
-    return new ChatbotError(
-      "bad_request:ppt_preview",
-      "Invalid request body"
-    ).toResponse();
+    return new ChatbotError("bad_request:api", "Invalid request body").toResponse();
   }
 
   const threadId = body.chatId?.trim();
   const messageId = body.messageId?.trim();
 
   if (!threadId) {
-    return new ChatbotError(
-      "bad_request:ppt_preview",
-      "Invalid preview request"
-    ).toResponse();
+    return new ChatbotError("bad_request:api", "Invalid preview request").toResponse();
   }
 
   const backendResponse = await fetch(`${BACKEND_API_BASE_URL}/api/v1/pptx/preview`, {
@@ -55,7 +49,7 @@ export async function POST(request: Request) {
     }
 
     return new ChatbotError(
-      "bad_request:ppt_preview",
+      "bad_request:api",
       backendDetail || "PPT preview failed"
     ).toResponse();
   }
