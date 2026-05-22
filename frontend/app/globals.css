@@ -401,6 +401,17 @@
   @apply bg-blue-200 hover:bg-blue-300 dark:hover:bg-blue-400/50 dark:text-blue-50 dark:bg-blue-500/40;
 }
 
+.ppt-preview-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.ppt-preview-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 /* minimal scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;

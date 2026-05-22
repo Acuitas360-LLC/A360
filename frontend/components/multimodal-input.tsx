@@ -29,6 +29,7 @@ import {
 import { ArrowUpIcon, StopIcon } from "./icons";
 import { PreviewAttachment } from "./preview-attachment";
 import { SuggestedActions } from "./suggested-actions";
+import { SuggestionDropdown, type SuggestionItem } from "./suggestion-dropdown";
 import { Button } from "./ui/button";
 import type { VisibilityType } from "./visibility-selector";
 
@@ -129,6 +130,24 @@ function PureMultimodalInput({
     ""
   );
 
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
+  const [hasSuggestionsLoaded, setHasSuggestionsLoaded] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [suggestionsPlacement, setSuggestionsPlacement] = useState<
+    "above" | "below"
+  >("above");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const lastQueryRef = useRef<string>("");
+  const suggestionsCacheRef = useRef<Map<string, SuggestionItem[]>>(new Map());
+
+  const normalizeSuggestionQuery = useCallback((value: string) => {
+    return value.trim().toLowerCase().replace(/\s+/g, " ");
+  }, []);
+
   useEffect(() => {
     if (textareaRef.current) {
       const domValue = textareaRef.current.value;
@@ -149,6 +168,219 @@ function PureMultimodalInput({
   useEffect(() => {
     setLocalStorageInput(input);
   }, [input, setLocalStorageInput]);
+
+  const closeSuggestions = useCallback(() => {
+    setSuggestionsOpen(false);
+    setHighlightedIndex(-1);
+    setHasSuggestionsLoaded(false);
+  }, []);
+
+  const handleSelectSuggestion = useCallback(
+    (suggestion: SuggestionItem) => {
+      setInput(suggestion.question);
+      lastQueryRef.current = suggestion.question.trim();
+      setSuggestionsOpen(false);
+      setHighlightedIndex(-1);
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+    },
+    [setInput]
+  );
+
+  const fetchSuggestions = useCallback(
+    async (query: string) => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setSuggestionsOpen(true);
+      setIsSuggestionsLoading(true);
+
+      try {
+        const response = await fetch(
+          `/api/suggestions?q=${encodeURIComponent(query)}`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) {
+          throw new Error(`Suggestions request failed: ${response.status}`);
+        }
+
+        const data = (await response.json()) as SuggestionItem[];
+        setHasSuggestionsLoaded(true);
+        const normalized = normalizeSuggestionQuery(query);
+        if (normalized) {
+          suggestionsCacheRef.current.set(normalized, data);
+          if (suggestionsCacheRef.current.size > 200) {
+            const firstKey = suggestionsCacheRef.current.keys().next().value as
+              | string
+              | undefined;
+            if (firstKey) {
+              suggestionsCacheRef.current.delete(firstKey);
+            }
+          }
+        }
+        setSuggestions(data);
+        setSuggestionsOpen(data.length > 0);
+        setHighlightedIndex(data.length > 0 ? 0 : -1);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setSuggestions([]);
+          setSuggestionsOpen(false);
+          setHasSuggestionsLoaded(true);
+        }
+      } finally {
+        setIsSuggestionsLoading(false);
+      }
+    },
+    [normalizeSuggestionQuery]
+  );
+
+  useEffect(() => {
+    const query = input.trim();
+    const normalized = normalizeSuggestionQuery(query);
+
+    if (normalized.length < 3) {
+      if (normalized.length === 2) {
+        const cached = suggestionsCacheRef.current.get(normalized);
+        if (cached) {
+          setSuggestions(cached);
+          setSuggestionsOpen(cached.length > 0);
+          setHighlightedIndex(cached.length > 0 ? 0 : -1);
+          setIsSuggestionsLoading(false);
+          return;
+        }
+      }
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+      setSuggestions([]);
+      setSuggestionsOpen(false);
+      setIsSuggestionsLoading(false);
+      setHasSuggestionsLoaded(false);
+      lastQueryRef.current = "";
+      return;
+    }
+
+    const cached = suggestionsCacheRef.current.get(normalized);
+    if (cached) {
+      setSuggestions(cached);
+      setSuggestionsOpen(cached.length > 0);
+      setHighlightedIndex(cached.length > 0 ? 0 : -1);
+      setHasSuggestionsLoaded(true);
+    }
+
+    if (normalized === lastQueryRef.current) {
+      return;
+    }
+
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    setIsSuggestionsLoading(true);
+    setSuggestionsOpen(true);
+    setHasSuggestionsLoaded(false);
+
+    debounceRef.current = setTimeout(() => {
+      lastQueryRef.current = normalized;
+      fetchSuggestions(query);
+    }, 150);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [fetchSuggestions, input, normalizeSuggestionQuery]);
+
+  useEffect(() => {
+    if (!suggestionsOpen) {
+      return;
+    }
+
+    const target = textareaRef.current;
+    if (!target) {
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const desiredHeight = 264;
+
+    if (spaceAbove < desiredHeight && spaceBelow > spaceAbove) {
+      setSuggestionsPlacement("below");
+    } else {
+      setSuggestionsPlacement("above");
+    }
+  }, [suggestionsOpen]);
+
+  useEffect(() => {
+    if (!suggestionsOpen) {
+      return;
+    }
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(event.target as Node)
+      ) {
+        closeSuggestions();
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [closeSuggestions, suggestionsOpen]);
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!suggestionsOpen || (suggestions.length === 0 && !isSuggestionsLoading)) {
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setHighlightedIndex((prev) =>
+          prev + 1 >= suggestions.length ? 0 : prev + 1
+        );
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setHighlightedIndex((prev) =>
+          prev - 1 < 0 ? suggestions.length - 1 : prev - 1
+        );
+        return;
+      }
+
+      if (event.key === "Enter" && highlightedIndex >= 0) {
+        event.preventDefault();
+        const suggestion = suggestions[highlightedIndex];
+        if (suggestion) {
+          handleSelectSuggestion(suggestion);
+        }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeSuggestions();
+      }
+    },
+    [
+      closeSuggestions,
+      handleSelectSuggestion,
+      highlightedIndex,
+      isSuggestionsLoading,
+      suggestions,
+      suggestionsOpen,
+    ]
+  );
 
   const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const target = event.target;
@@ -171,6 +403,7 @@ function PureMultimodalInput({
     window.history.pushState({}, "", `/chat/${chatId}`);
     setHasInteracted(true);
     onSubmitTriggered?.();
+    closeSuggestions();
 
     sendMessage({
       role: "user",
@@ -207,6 +440,7 @@ function PureMultimodalInput({
     chatId,
     onSubmitTriggered,
     resetHeight,
+    closeSuggestions,
   ]);
 
   const uploadFile = useCallback(async (file: File) => {
@@ -322,7 +556,10 @@ function PureMultimodalInput({
   }, [handlePaste]);
 
   return (
-    <div className={cn("relative flex w-full flex-col gap-4", className)}>
+    <div
+      className={cn("relative flex w-full flex-col gap-4", className)}
+      ref={suggestionsRef}
+    >
       <input
         className="pointer-events-none fixed -top-4 -left-4 size-0.5 opacity-0"
         multiple
@@ -334,7 +571,7 @@ function PureMultimodalInput({
 
       <PromptInput
         className={cn(
-          "rounded-xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50",
+          "relative overflow-visible rounded-xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50",
           prominent &&
             "-translate-y-px border-border/70 bg-background/95 ring-1 ring-black/[0.06] shadow-sm supports-[backdrop-filter]:bg-background/85"
         )}
@@ -385,18 +622,29 @@ function PureMultimodalInput({
         )}
         <div className="flex flex-row items-start gap-1 sm:gap-2">
           <PromptInputTextarea
-            className="grow resize-none border-0! border-none! bg-transparent p-2 text-base outline-none ring-0 [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:hidden"
+            className="grow resize-none border-0! border-none! bg-transparent p-2 text-base text-left outline-none ring-0 [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:hidden"
             data-testid="multimodal-input"
             disableAutoResize={true}
             maxHeight={MAX_TEXTAREA_HEIGHT}
             minHeight={defaultTextareaHeightRef.current}
             onChange={handleInput}
+            onKeyDown={handleKeyDown}
             placeholder="Ask your query"
             ref={textareaRef}
             rows={1}
             value={input}
           />
         </div>
+        <SuggestionDropdown
+          open={suggestionsOpen}
+          loading={isSuggestionsLoading}
+          hasLoaded={hasSuggestionsLoaded}
+          suggestions={suggestions}
+          highlightedIndex={highlightedIndex}
+          onSelect={handleSelectSuggestion}
+          onHighlight={setHighlightedIndex}
+          placement={suggestionsPlacement}
+        />
         <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
           <PromptInputTools className="gap-0 sm:gap-0.5">
             <BulkUploadSelector

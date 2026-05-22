@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "code-review-graph": {
+      "command": "c:\\Users\\WasifAnsari\\Downloads\\Updated\\Updated\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "code_review_graph",
+        "serve"
+      ],
+      "cwd": "C:\\Users\\WasifAnsari\\Downloads\\Updated\\Updated",
+      "type": "stdio"
+    }
+  }
+}

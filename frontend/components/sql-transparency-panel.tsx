@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChartErrorBoundary } from "@/components/chart-error-boundary";
 import { PlotlyFigureChart } from "@/components/plotly-figure-chart";
+import { Response } from "@/components/elements/response";
+import { formatSummaryHeadings } from "@/lib/utils";
 import type { VisibilityType } from "./visibility-selector";
 
 type SQLTransparencyPanelProps = {
@@ -338,7 +340,9 @@ export function SQLTransparencyPanel({
       {showResultSummary && resultSummary && (
         <div className="response-section mb-3">
           <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Result Summary</p>
-          <p className="text-sm leading-6 text-foreground/95">{resultSummary}</p>
+          <Response className="text-sm leading-6 text-foreground/95">
+            {formatSummaryHeadings(resultSummary)}
+          </Response>
         </div>
       )}
 

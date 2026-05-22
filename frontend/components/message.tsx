@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AnalyticsInsight } from "@/components/analytics-demo";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
-import { cn, sanitizeText } from "@/lib/utils";
+import { cn, formatSummaryHeadings, sanitizeText } from "@/lib/utils";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
 import { MessageContent } from "./elements/message";
@@ -374,14 +374,18 @@ const PurePreviewMessage = ({
                   <div className={cn("w-full", message.role === "assistant" && "response-section")} key={key}>
                     <MessageContent
                       className={cn({
-                        "wrap-break-word w-fit rounded-3xl bg-primary px-4 py-2.5 text-right text-primary-foreground":
+                        "wrap-break-word w-fit rounded-3xl bg-primary px-4 py-2.5 text-left text-primary-foreground":
                           message.role === "user",
                         "w-full rounded-none border-0 bg-transparent px-0 py-0 text-left shadow-none":
                           message.role === "assistant",
                       })}
                       data-testid="message-content"
                     >
-                      <Response>{sanitizeText(part.text)}</Response>
+                      <Response>
+                        {message.role === "assistant"
+                          ? formatSummaryHeadings(sanitizeText(part.text))
+                          : sanitizeText(part.text)}
+                      </Response>
                     </MessageContent>
                   </div>
                 );

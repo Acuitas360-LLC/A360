@@ -156,6 +156,51 @@ export function sanitizeText(text: string) {
   return text.replace('<has_function_call>', '');
 }
 
+const SUMMARY_SECTION_LABELS = [
+  "Overview",
+  "Findings",
+  "Key Takeaways",
+  "Opportunity / Implication",
+];
+
+export function formatSummaryHeadings(text: string) {
+  if (!text) {
+    return text;
+  }
+
+  const lines = text.split(/\r?\n/);
+
+  const formatted = lines.map((line) => {
+    const trimmed = line.trimStart();
+    if (!trimmed) {
+      return line;
+    }
+
+    for (const label of SUMMARY_SECTION_LABELS) {
+      if (trimmed.startsWith(`**${label}**`)) {
+        return line;
+      }
+
+      if (!trimmed.startsWith(label)) {
+        continue;
+      }
+
+      const nextChar = trimmed.charAt(label.length);
+      if (nextChar && !nextChar.match(/\s|:/)) {
+        continue;
+      }
+
+      const leadingWhitespace = line.slice(0, line.length - trimmed.length);
+      const rest = trimmed.slice(label.length);
+      return `${leadingWhitespace}**${label}**${rest}`;
+    }
+
+    return line;
+  });
+
+  return formatted.join("\n");
+}
+
 export function convertToUIMessages(messages: DBMessage[]): ChatMessage[] {
   return messages.map((message) => ({
     id: message.id,

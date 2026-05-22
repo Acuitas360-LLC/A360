@@ -694,6 +694,13 @@ export function Chat({
   const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
 
   useEffect(() => {
+    setInput("");
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("input");
+    }
+  }, [id]);
+
+  useEffect(() => {
     if (query && !hasAppendedQuery) {
       setInput((current) => (current.trim().length > 0 ? current : query));
 
