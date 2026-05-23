@@ -65,7 +65,8 @@ type EmittableDataPartType =
   | "data-visualizationSpec"
   | "data-visualizationFigure"
   | "data-visualizationMeta"
-  | "data-relevantQuestions";
+  | "data-relevantQuestions"
+  | "data-assistantMessageId";
 
 function extractQuestion(body: { message?: RequestMessage; messages?: RequestMessage[] }): string {
   const candidate = body.message ?? body.messages?.at(-1);
@@ -749,6 +750,14 @@ export async function POST(req: Request) {
                 "data-relevantQuestions",
                 relevantQuestions
               );
+            }
+            continue;
+          }
+
+          if (event.event === "message_ids") {
+            const assistantMessageId = String(payload.assistant_message_id ?? "").trim();
+            if (assistantMessageId) {
+              writeDataPartIfChanged("data-assistantMessageId", assistantMessageId);
             }
             continue;
           }

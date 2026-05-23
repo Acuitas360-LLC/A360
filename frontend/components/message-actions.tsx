@@ -244,6 +244,7 @@ type PptPreviewSlide = {
   kpis?: Array<{ label?: string; value?: string }>;
   insight?: string;
   chart?: string | null;
+  chartFit?: "contain" | "cover" | "fill" | null;
 };
 
 type PptResponse = {
@@ -408,6 +409,12 @@ export function PureMessageActions({
   const [showPptStages, setShowPptStages] = useState(false);
   const [pptDotStep, setPptDotStep] = useState(0);
 
+  const assistantMessageId = message.parts
+    ?.find((part) => part.type === "data-assistantMessageId") as
+    | { type: "data-assistantMessageId"; data: string }
+    | undefined;
+  const pptMessageId = assistantMessageId?.data?.trim() || message.id;
+
   const textFromParts = message.parts
     ?.filter((part) => part.type === "text")
     .map((part) => part.text)
@@ -517,7 +524,7 @@ export function PureMessageActions({
     const tracker = startPptStatusTracker(setStatus, setStageLabels);
 
     try {
-      const messageId = mode === "slide" ? message.id : undefined;
+      const messageId = mode === "slide" ? pptMessageId : undefined;
       const previewPromise = requestPptPreview(chatId, messageId).then(
         (slides) => {
           tracker.markPreviewReady(slides.length);
@@ -578,7 +585,7 @@ export function PureMessageActions({
       mode,
       "attachment",
       chatId,
-      mode === "slide" ? message.id : undefined
+      mode === "slide" ? pptMessageId : undefined
     )
       .then((result) => {
         setResult(result);
@@ -883,6 +890,12 @@ export function PureMessageActions({
                         Array.isArray(slide.kpis) && slide.kpis.length > 0;
                       const hasInsight = Boolean(slide.insight);
                       const hasChart = Boolean(slide.chart);
+                      const insightLabelH = 0.22;
+                      const logoW = 0.8;
+                      const logoH = 0.4;
+                      const logoMargin = 0.2;
+                      const logoX = PPT_LAYOUT.marginL;
+                      const logoY = PPT_LAYOUT.insightY + insightLabelH + logoMargin;
                       const contentBot = hasInsight
                         ? PPT_LAYOUT.insightY - 0.1
                         : PPT_LAYOUT.footerY - 0.06;
@@ -899,8 +912,10 @@ export function PureMessageActions({
                       const kpiGapPct = hasKpis
                         ? (kpiGap / contentH) * 100
                         : 0;
-                      const chartPadX = (PPT_LAYOUT.chartPad / leftPanelW) * 100;
-                      const chartPadY = (PPT_LAYOUT.chartPad / contentH) * 100;
+                      const chartFit = slide.chartFit || "contain";
+                      const chartPad = chartFit === "cover" || chartFit === "fill" ? 0 : PPT_LAYOUT.chartPad;
+                      const chartPadX = (chartPad / leftPanelW) * 100;
+                      const chartPadY = (chartPad / contentH) * 100;
                       const accentColors = [
                         PPT_PREVIEW_THEME.accent1,
                         PPT_PREVIEW_THEME.accent2,
@@ -981,7 +996,8 @@ export function PureMessageActions({
                                   top: `${chartPadY}%`,
                                   width: `calc(100% - ${chartPadX * 2}%)`,
                                   height: `calc(100% - ${chartPadY * 2}%)`,
-                                  objectFit: "contain",
+                                  objectFit: chartFit,
+                                  objectPosition: "center",
                                 }}
                               />
                             ) : (
@@ -1122,6 +1138,18 @@ export function PureMessageActions({
                               >
                                 KEY INSIGHT
                               </div>
+                              <img
+                                alt="Geron logo"
+                                src="/images/geron_logo.png"
+                                style={{
+                                  position: "absolute",
+                                  left: pctW(logoX),
+                                  top: pctH(logoY),
+                                  width: pctW(logoW),
+                                  height: pctH(logoH),
+                                  objectFit: "contain",
+                                }}
+                              />
                               <div
                                 style={{
                                   position: "absolute",

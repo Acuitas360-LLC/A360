@@ -48,6 +48,7 @@ export type CustomUIDataTypes = {
     state?: string;
   }>;
   relevantQuestions: string[];
+  assistantMessageId: string;
   suggestion: Suggestion;
   appendMessage: string;
   id: string;

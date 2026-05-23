@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export type SuggestionItem = {
   question: string;
-  score: number;
+  score?: number;
 };
 
 type SuggestionDropdownProps = {
@@ -88,9 +88,6 @@ export function SuggestionDropdown({
               }}
             >
               <span className="truncate">{suggestion.question}</span>
-              <span className="ml-auto text-xs text-muted-foreground">
-                {suggestion.score.toFixed(2)}
-              </span>
             </button>
           );
         })
