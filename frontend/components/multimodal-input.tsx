@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
 import { BulkUploadSelector } from "@/components/bulk-upload-selector";
 import { DailyPulseSelector } from "@/components/daily-pulse-selector";
+import { withBrowserAuthHeaders } from "@/lib/iframe-auth";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
@@ -202,7 +203,10 @@ function PureMultimodalInput({
       try {
         const response = await fetch(
           `/api/suggestions?q=${encodeURIComponent(query)}`,
-          { signal: controller.signal }
+          {
+            signal: controller.signal,
+            headers: withBrowserAuthHeaders(),
+          }
         );
         if (!response.ok) {
           throw new Error(`Suggestions request failed: ${response.status}`);

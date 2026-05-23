@@ -279,10 +279,9 @@ async function requestPpt(
 ): Promise<PptResponse> {
   const response = await fetch("/api/ppt", {
     method: "POST",
-    headers: {
+    headers: withBrowserAuthHeaders({
       "Content-Type": "application/json",
-      ...withBrowserAuthHeaders(),
-    },
+    }),
     body: JSON.stringify({
       mode,
       disposition,
@@ -309,10 +308,9 @@ async function requestPptPreview(
 ): Promise<PptPreviewSlide[]> {
   const response = await fetch("/api/ppt/preview", {
     method: "POST",
-    headers: {
+    headers: withBrowserAuthHeaders({
       "Content-Type": "application/json",
-      ...withBrowserAuthHeaders(),
-    },
+    }),
     body: JSON.stringify({
       chatId,
       messageId,
