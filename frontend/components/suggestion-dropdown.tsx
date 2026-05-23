@@ -49,7 +49,7 @@ export function SuggestionDropdown({
       role="listbox"
       aria-label="Suggestions"
     >
-      {loading ? (
+      {(loading || !hasLoaded) && suggestions.length === 0 ? (
         <div className="px-3 py-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-muted-foreground/70" />

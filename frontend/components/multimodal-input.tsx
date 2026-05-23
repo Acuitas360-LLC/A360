@@ -73,6 +73,8 @@ function PureMultimodalInput({
 }) {
   const DEFAULT_TEXTAREA_HEIGHT = 44;
   const MAX_TEXTAREA_HEIGHT = 200;
+  const MIN_SUGGESTION_LENGTH = 2;
+  const SUGGESTION_DEBOUNCE_MS = 35;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const defaultTextareaHeightRef = useRef(DEFAULT_TEXTAREA_HEIGHT);
@@ -143,6 +145,7 @@ function PureMultimodalInput({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastQueryRef = useRef<string>("");
+  const isFirstSuggestionRef = useRef(true);
   const suggestionsCacheRef = useRef<Map<string, SuggestionItem[]>>(new Map());
 
   const normalizeSuggestionQuery = useCallback((value: string) => {
@@ -246,17 +249,7 @@ function PureMultimodalInput({
     const query = input.trim();
     const normalized = normalizeSuggestionQuery(query);
 
-    if (normalized.length < 3) {
-      if (normalized.length === 2) {
-        const cached = suggestionsCacheRef.current.get(normalized);
-        if (cached) {
-          setSuggestions(cached);
-          setSuggestionsOpen(cached.length > 0);
-          setHighlightedIndex(cached.length > 0 ? 0 : -1);
-          setIsSuggestionsLoading(false);
-          return;
-        }
-      }
+    if (normalized.length < MIN_SUGGESTION_LENGTH) {
       if (abortRef.current) {
         abortRef.current.abort();
       }
@@ -265,6 +258,7 @@ function PureMultimodalInput({
       setIsSuggestionsLoading(false);
       setHasSuggestionsLoaded(false);
       lastQueryRef.current = "";
+      isFirstSuggestionRef.current = true;
       return;
     }
 
@@ -277,6 +271,7 @@ function PureMultimodalInput({
     }
 
     if (normalized === lastQueryRef.current) {
+      setIsSuggestionsLoading(false);
       return;
     }
 
@@ -286,12 +281,19 @@ function PureMultimodalInput({
 
     setIsSuggestionsLoading(true);
     setSuggestionsOpen(true);
-    setHasSuggestionsLoaded(false);
+    setHasSuggestionsLoaded(Boolean(cached));
+
+    if (isFirstSuggestionRef.current) {
+      isFirstSuggestionRef.current = false;
+      lastQueryRef.current = normalized;
+      fetchSuggestions(query);
+      return;
+    }
 
     debounceRef.current = setTimeout(() => {
       lastQueryRef.current = normalized;
       fetchSuggestions(query);
-    }, 150);
+    }, SUGGESTION_DEBOUNCE_MS);
 
     return () => {
       if (debounceRef.current) {
