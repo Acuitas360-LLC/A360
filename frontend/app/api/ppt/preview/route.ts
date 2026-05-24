@@ -7,6 +7,8 @@ const BACKEND_API_BASE_URL =
 type PreviewRequestBody = {
   chatId?: string;
   messageId?: string;
+  chartImageBase64?: string;
+  chartImagesBase64?: string[];
 };
 
 export async function POST(request: Request) {
@@ -19,6 +21,10 @@ export async function POST(request: Request) {
 
   const threadId = body.chatId?.trim();
   const messageId = body.messageId?.trim();
+  const chartImageBase64 = body.chartImageBase64?.trim();
+  const chartImagesBase64 = Array.isArray(body.chartImagesBase64)
+    ? body.chartImagesBase64
+    : undefined;
 
   if (!threadId) {
     return new ChatbotError("bad_request:api", "Invalid preview request").toResponse();
@@ -32,6 +38,8 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       thread_id: threadId,
       message_id: messageId,
+      chart_image_base64: chartImageBase64,
+      chart_images_base64: chartImagesBase64,
     }),
   });
 

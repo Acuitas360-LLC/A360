@@ -1,5 +1,6 @@
 import equal from "fast-deep-equal";
 import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+let plotlyModule: Promise<any> | null = null;
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { useCopyToClipboard } from "usehooks-ts";
@@ -252,6 +253,96 @@ type PptResponse = {
   filename?: string;
 };
 
+type PlotlyFigure = {
+  data?: unknown[];
+  layout?: Record<string, unknown>;
+  frames?: unknown[];
+  config?: Record<string, unknown>;
+};
+
+function getPlotlyFigure(message: ChatMessage): PlotlyFigure | undefined {
+  const part = message.parts?.find(
+    (item) => item.type === "data-visualizationFigure"
+  ) as { data?: unknown } | undefined;
+
+  if (!part || !part.data || typeof part.data !== "object") {
+    return undefined;
+  }
+
+  return part.data as PlotlyFigure;
+}
+
+async function buildPlotlyImageBase64(
+  figure: PlotlyFigure | undefined
+): Promise<string | undefined> {
+  if (!figure?.data?.length) {
+    return undefined;
+  }
+
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  if (!plotlyModule) {
+    plotlyModule = import("plotly.js-dist-min");
+  }
+
+  const Plotly = await plotlyModule;
+
+  const layout = {
+    ...(figure.layout || {}),
+    paper_bgcolor: "#FFFFFF",
+    plot_bgcolor: "#FFFFFF",
+  };
+
+  try {
+    const dataUrl = await Plotly.toImage(
+      {
+        data: figure.data,
+        layout,
+        config: figure.config,
+      },
+      { format: "png", width: 1000, height: 600, scale: 2 }
+    );
+
+    return typeof dataUrl === "string" ? dataUrl : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function buildDeckChartImagesBase64(
+  messages: ChatMessage[]
+): Promise<string[] | undefined> {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return undefined;
+  }
+
+  const overrides: Array<string | undefined> = [];
+  let currentIndex = -1;
+
+  for (const entry of messages) {
+    if (entry.role === "user") {
+      overrides.push(undefined);
+      currentIndex = overrides.length - 1;
+      continue;
+    }
+
+    if (entry.role !== "assistant" || currentIndex < 0) {
+      continue;
+    }
+
+    if (!overrides[currentIndex]) {
+      const image = await buildPlotlyImageBase64(getPlotlyFigure(entry));
+      if (image) {
+        overrides[currentIndex] = image;
+      }
+    }
+  }
+
+  return overrides.map((value) => value || "");
+}
+
 function extractFilename(contentDisposition: string | null): string | undefined {
   if (!contentDisposition) {
     return undefined;
@@ -276,7 +367,9 @@ async function requestPpt(
   mode: PptMode,
   disposition: PptDisposition,
   chatId: string,
-  messageId?: string
+  messageId?: string,
+  chartImageBase64?: string,
+  chartImagesBase64?: string[]
 ): Promise<PptResponse> {
   const response = await fetch("/api/ppt", {
     method: "POST",
@@ -288,6 +381,8 @@ async function requestPpt(
       disposition,
       chatId,
       messageId,
+      chartImageBase64,
+      chartImagesBase64,
     }),
   });
 
@@ -305,7 +400,9 @@ async function requestPpt(
 
 async function requestPptPreview(
   chatId: string,
-  messageId?: string
+  messageId?: string,
+  chartImageBase64?: string,
+  chartImagesBase64?: string[]
 ): Promise<PptPreviewSlide[]> {
   const response = await fetch("/api/ppt/preview", {
     method: "POST",
@@ -315,6 +412,8 @@ async function requestPptPreview(
     body: JSON.stringify({
       chatId,
       messageId,
+      chartImageBase64,
+      chartImagesBase64,
     }),
   });
 
@@ -365,6 +464,7 @@ export function PureMessageActions({
   setMode,
   previousUserQuery,
   onNegativeFeedbackRetry,
+  allMessages,
 }: {
   chatId: string;
   message: ChatMessage;
@@ -377,6 +477,7 @@ export function PureMessageActions({
     feedbackText: string,
     downvotedMessageId: string
   ) => void;
+  allMessages: ChatMessage[];
 }) {
   const { mutate } = useSWRConfig();
   const [_, copyToClipboard] = useCopyToClipboard();
@@ -525,13 +626,29 @@ export function PureMessageActions({
 
     try {
       const messageId = mode === "slide" ? pptMessageId : undefined;
-      const previewPromise = requestPptPreview(chatId, messageId).then(
+      const chartImageBase64 =
+        mode === "slide" ? await buildPlotlyImageBase64(getPlotlyFigure(message)) : undefined;
+      const chartImagesBase64 =
+        mode === "deck" ? await buildDeckChartImagesBase64(allMessages) : undefined;
+      const previewPromise = requestPptPreview(
+        chatId,
+        messageId,
+        chartImageBase64,
+        chartImagesBase64
+      ).then(
         (slides) => {
           tracker.markPreviewReady(slides.length);
           return slides;
         }
       );
-      const pptPromise = requestPpt(mode, "attachment", chatId, messageId).then(
+      const pptPromise = requestPpt(
+        mode,
+        "attachment",
+        chatId,
+        messageId,
+        chartImageBase64,
+        chartImagesBase64
+      ).then(
         (pptx) => {
           tracker.markPptReady();
           return pptx;
@@ -557,7 +674,7 @@ export function PureMessageActions({
     }
   };
 
-  const handlePptOpen = (mode: PptMode, disposition: PptDisposition) => {
+  const handlePptOpen = async (mode: PptMode, disposition: PptDisposition) => {
     const setResult = mode === "slide" ? setSlidePpt : setDeckPpt;
     const existing = mode === "slide" ? slidePpt : deckPpt;
 
@@ -581,11 +698,17 @@ export function PureMessageActions({
 
     const setLoading = mode === "slide" ? setIsGeneratingSlide : setIsGeneratingDeck;
     setLoading(true);
+    const chartImageBase64 =
+      mode === "slide" ? await buildPlotlyImageBase64(getPlotlyFigure(message)) : undefined;
+    const chartImagesBase64 =
+      mode === "deck" ? await buildDeckChartImagesBase64(allMessages) : undefined;
     requestPpt(
       mode,
       "attachment",
       chatId,
-      mode === "slide" ? pptMessageId : undefined
+      mode === "slide" ? pptMessageId : undefined,
+      chartImageBase64,
+      chartImagesBase64
     )
       .then((result) => {
         setResult(result);
@@ -1051,6 +1174,14 @@ export function PureMessageActions({
                               {kpis.map((kpi, kpiIndex) => (
                                 (() => {
                                   const valueText = kpi.value || "--";
+                                  const kpiRecord = kpi as Record<string, unknown>;
+                                  const definitionText =
+                                    (typeof kpiRecord.defination === "string"
+                                      ? kpiRecord.defination
+                                      : "") ||
+                                    (typeof kpiRecord.definition === "string"
+                                      ? kpiRecord.definition
+                                      : "");
 
                                   return (
                                     <div
@@ -1064,7 +1195,7 @@ export function PureMessageActions({
                                         border: `1px solid ${PPT_PREVIEW_THEME.kpiBorder}`,
                                         background: PPT_PREVIEW_THEME.kpiBg,
                                         borderRadius: "6px",
-                                        padding: "5% 8% 7%",
+                                        padding: "5% 8% 0",
                                       }}
                                     >
                                   <div
@@ -1082,8 +1213,8 @@ export function PureMessageActions({
                                     style={{
                                       marginLeft: "10%",
                                       height: "100%",
-                                      display: "flex",
-                                      flexDirection: "column",
+                                      display: "grid",
+                                      gridTemplateRows: "auto minmax(0, 1fr) auto",
                                     }}
                                   >
                                     <div
@@ -1102,7 +1233,7 @@ export function PureMessageActions({
                                     <AutoFitText
                                       text={valueText}
                                       minSize={9}
-                                      maxSize={26}
+                                      maxSize={28}
                                       style={{
                                         marginTop: "3%",
                                         flex: "1 1 auto",
@@ -1116,6 +1247,21 @@ export function PureMessageActions({
                                         overflowWrap: "anywhere",
                                       }}
                                     />
+                                    {definitionText ? (
+                                      <div
+                                        style={{
+                                          fontSize: "clamp(7px, 0.9vw, 9px)",
+                                          lineHeight: 1.25,
+                                          fontStyle: "italic",
+                                          color: PPT_PREVIEW_THEME.mutedText,
+                                          whiteSpace: "normal",
+                                          wordBreak: "break-word",
+                                          overflowWrap: "anywhere",
+                                        }}
+                                      >
+                                        {definitionText}
+                                      </div>
+                                    ) : null}
                                   </div>
                                 </div>
                                 );

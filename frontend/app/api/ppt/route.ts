@@ -9,6 +9,8 @@ type PptRequestBody = {
   chatId?: string;
   messageId?: string;
   disposition?: "inline" | "attachment";
+  chartImageBase64?: string;
+  chartImagesBase64?: string[];
 };
 
 export async function POST(request: Request) {
@@ -23,6 +25,10 @@ export async function POST(request: Request) {
   const threadId = body.chatId?.trim();
   const messageId = body.messageId?.trim();
   const disposition = body.disposition?.trim();
+  const chartImageBase64 = body.chartImageBase64?.trim();
+  const chartImagesBase64 = Array.isArray(body.chartImagesBase64)
+    ? body.chartImagesBase64
+    : undefined;
 
   if (!threadId || (mode !== "slide" && mode !== "deck")) {
     return new ChatbotError("bad_request:api", "Invalid PPT request").toResponse();
@@ -43,6 +49,8 @@ export async function POST(request: Request) {
       thread_id: threadId,
       message_id: messageId,
       disposition,
+      chart_image_base64: chartImageBase64,
+      chart_images_base64: chartImagesBase64,
     }),
   });
 

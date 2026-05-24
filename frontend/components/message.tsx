@@ -66,6 +66,7 @@ const PurePreviewMessage = ({
   onEditFailedResponse,
   onRetryFailedResponse,
   onNegativeFeedbackRetry,
+  allMessages,
   previousUserQuery,
 }: {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
@@ -86,6 +87,7 @@ const PurePreviewMessage = ({
     feedbackText: string,
     downvotedMessageId: string
   ) => void;
+  allMessages: ChatMessage[];
   previousUserQuery: string;
 }) => {
   const [mode, setMode] = useState<"view" | "edit">("view");
@@ -621,6 +623,7 @@ const PurePreviewMessage = ({
                 previousUserQuery={previousUserQuery}
                 setMode={setMode}
                 vote={vote}
+                allMessages={allMessages}
               />
             </div>
           )}

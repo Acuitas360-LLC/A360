@@ -98,7 +98,6 @@ function PureMessages({
     if (!latestUserMessageId) {
       return;
     }
-
     // Submit can fire before the new user message is appended. In that case,
     // wait for a different latest user message id instead of anchoring the old one.
     if (latestUserMessageId === lastAnchoredUserMessageIdRef.current) {
@@ -354,6 +353,7 @@ function PureMessages({
           {messages.map((message, index) => (
             <PreviewMessage
               addToolApprovalResponse={addToolApprovalResponse}
+              allMessages={messages}
               chatId={chatId}
               isLoading={
                 status === "streaming" && messages.length - 1 === index
