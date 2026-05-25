@@ -145,6 +145,8 @@ function PureMultimodalInput({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastQueryRef = useRef<string>("");
+  const lastRequestAtRef = useRef(0);
+  const requestIdRef = useRef(0);
   const isFirstSuggestionRef = useRef(true);
   const suggestionsCacheRef = useRef<Map<string, SuggestionItem[]>>(new Map());
 
@@ -198,10 +200,14 @@ function PureMultimodalInput({
         abortRef.current.abort();
       }
 
+      const normalized = normalizeSuggestionQuery(query);
+      const requestId = requestIdRef.current + 1;
+      requestIdRef.current = requestId;
       const controller = new AbortController();
       abortRef.current = controller;
       setSuggestionsOpen(true);
       setIsSuggestionsLoading(true);
+      setHasSuggestionsLoaded(false);
 
       try {
         const response = await fetch(
@@ -216,8 +222,10 @@ function PureMultimodalInput({
         }
 
         const data = (await response.json()) as SuggestionItem[];
+        if (requestIdRef.current !== requestId) {
+          return;
+        }
         setHasSuggestionsLoaded(true);
-        const normalized = normalizeSuggestionQuery(query);
         if (normalized) {
           suggestionsCacheRef.current.set(normalized, data);
           if (suggestionsCacheRef.current.size > 200) {
@@ -239,7 +247,9 @@ function PureMultimodalInput({
           setHasSuggestionsLoaded(true);
         }
       } finally {
-        setIsSuggestionsLoading(false);
+        if (requestIdRef.current === requestId) {
+          setIsSuggestionsLoading(false);
+        }
       }
     },
     [normalizeSuggestionQuery]
@@ -265,13 +275,15 @@ function PureMultimodalInput({
     const cached = suggestionsCacheRef.current.get(normalized);
     if (cached) {
       setSuggestions(cached);
-      setSuggestionsOpen(cached.length > 0);
+      setSuggestionsOpen(true);
       setHighlightedIndex(cached.length > 0 ? 0 : -1);
       setHasSuggestionsLoaded(true);
+      setIsSuggestionsLoading(false);
+      lastQueryRef.current = normalized;
+      return;
     }
 
     if (normalized === lastQueryRef.current) {
-      setIsSuggestionsLoading(false);
       return;
     }
 
@@ -279,21 +291,30 @@ function PureMultimodalInput({
       clearTimeout(debounceRef.current);
     }
 
+    setSuggestions([]);
     setIsSuggestionsLoading(true);
     setSuggestionsOpen(true);
-    setHasSuggestionsLoaded(Boolean(cached));
+    setHasSuggestionsLoaded(false);
+    setHighlightedIndex(-1);
 
-    if (isFirstSuggestionRef.current) {
-      isFirstSuggestionRef.current = false;
+    const now = Date.now();
+    const elapsed = now - lastRequestAtRef.current;
+    const runFetch = () => {
+      lastRequestAtRef.current = Date.now();
       lastQueryRef.current = normalized;
       fetchSuggestions(query);
+    };
+
+    if (isFirstSuggestionRef.current || elapsed >= SUGGESTION_DEBOUNCE_MS) {
+      isFirstSuggestionRef.current = false;
+      runFetch();
       return;
     }
 
-    debounceRef.current = setTimeout(() => {
-      lastQueryRef.current = normalized;
-      fetchSuggestions(query);
-    }, SUGGESTION_DEBOUNCE_MS);
+    debounceRef.current = setTimeout(
+      runFetch,
+      Math.max(0, SUGGESTION_DEBOUNCE_MS - elapsed)
+    );
 
     return () => {
       if (debounceRef.current) {
