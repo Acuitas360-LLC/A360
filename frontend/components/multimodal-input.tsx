@@ -239,7 +239,7 @@ function PureMultimodalInput({
         }
         setSuggestions(data);
         setSuggestionsOpen(data.length > 0);
-        setHighlightedIndex(data.length > 0 ? 0 : -1);
+        setHighlightedIndex(-1);
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
           setSuggestions([]);
@@ -276,7 +276,7 @@ function PureMultimodalInput({
     if (cached) {
       setSuggestions(cached);
       setSuggestionsOpen(true);
-      setHighlightedIndex(cached.length > 0 ? 0 : -1);
+      setHighlightedIndex(-1);
       setHasSuggestionsLoaded(true);
       setIsSuggestionsLoading(false);
       lastQueryRef.current = normalized;
@@ -363,59 +363,6 @@ function PureMultimodalInput({
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [closeSuggestions, suggestionsOpen]);
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (!suggestionsOpen || (suggestions.length === 0 && !isSuggestionsLoading)) {
-        return;
-      }
-
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setHighlightedIndex((prev) =>
-          prev + 1 >= suggestions.length ? 0 : prev + 1
-        );
-        return;
-      }
-
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setHighlightedIndex((prev) =>
-          prev - 1 < 0 ? suggestions.length - 1 : prev - 1
-        );
-        return;
-      }
-
-      if (event.key === "Enter" && highlightedIndex >= 0) {
-        event.preventDefault();
-        const suggestion = suggestions[highlightedIndex];
-        if (suggestion) {
-          handleSelectSuggestion(suggestion);
-        }
-        return;
-      }
-
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeSuggestions();
-      }
-    },
-    [
-      closeSuggestions,
-      handleSelectSuggestion,
-      highlightedIndex,
-      isSuggestionsLoading,
-      suggestions,
-      suggestionsOpen,
-    ]
-  );
-
-  const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const target = event.target;
-    resizeTextareaToContent(target);
-
-    setInput(event.target.value);
-  };
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadQueue, setUploadQueue] = useState<string[]>([]);
   const [hasInteracted, setHasInteracted] = useState(messages.length > 0);
@@ -469,6 +416,87 @@ function PureMultimodalInput({
     resetHeight,
     closeSuggestions,
   ]);
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!suggestionsOpen || (suggestions.length === 0 && !isSuggestionsLoading)) {
+        if (event.key === "Enter" && !event.shiftKey) {
+          const hasContent = input.trim().length > 0 || attachments.length > 0;
+          if (!hasContent) {
+            return;
+          }
+          event.preventDefault();
+          if (status !== "ready") {
+            toast.error("Please wait for the model to finish its response!");
+          } else {
+            submitForm();
+          }
+        }
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setHighlightedIndex((prev) =>
+          prev + 1 >= suggestions.length ? 0 : prev + 1
+        );
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setHighlightedIndex((prev) =>
+          prev - 1 < 0 ? suggestions.length - 1 : prev - 1
+        );
+        return;
+      }
+
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        if (highlightedIndex >= 0) {
+          const suggestion = suggestions[highlightedIndex];
+          if (suggestion) {
+            handleSelectSuggestion(suggestion);
+          }
+          return;
+        }
+        const hasContent = input.trim().length > 0 || attachments.length > 0;
+        if (!hasContent) {
+          return;
+        }
+        if (status !== "ready") {
+          toast.error("Please wait for the model to finish its response!");
+        } else {
+          submitForm();
+        }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeSuggestions();
+      }
+    },
+    [
+      attachments.length,
+      closeSuggestions,
+      handleSelectSuggestion,
+      highlightedIndex,
+      input,
+      isSuggestionsLoading,
+      status,
+      submitForm,
+      suggestions,
+      suggestionsOpen,
+    ]
+  );
+
+  const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const target = event.target;
+    resizeTextareaToContent(target);
+
+    setInput(event.target.value);
+  };
 
   const uploadFile = useCallback(async (file: File) => {
     const formData = new FormData();

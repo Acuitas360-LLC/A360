@@ -521,12 +521,6 @@ export function SQLTransparencyPanel({
         </div>
       )}
 
-      {!!visualizationCode && !visualizationFigure && !renderVisualizationPlaceholder && (
-        <div className="response-section mb-3 rounded-md border border-amber-300/60 bg-amber-50/40 p-2 text-xs text-amber-900">
-          Deterministic Plotly chart is unavailable for this response. Summary and table remain available.
-        </div>
-      )}
-
       {!!relevantQuestions?.length && (
         <div className="response-section mt-4">
           <p className="mb-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Potential Follow-up Questions</p>

@@ -4,44 +4,29 @@ import { withForwardedAuthHeaders } from "@/lib/server/auth-forward";
 const BACKEND_API_BASE_URL =
   process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000";
 
-type PreviewRequestBody = {
-  chatId?: string;
-  messageId?: string;
-  chartImageBase64?: string;
-  chartImagesBase64?: string[];
+type CancelRequestBody = {
   requestId?: string;
 };
 
 export async function POST(request: Request) {
-  let body: PreviewRequestBody;
+  let body: CancelRequestBody;
   try {
-    body = (await request.json()) as PreviewRequestBody;
+    body = (await request.json()) as CancelRequestBody;
   } catch {
     return new ChatbotError("bad_request:api", "Invalid request body").toResponse();
   }
 
-  const threadId = body.chatId?.trim();
-  const messageId = body.messageId?.trim();
-  const chartImageBase64 = body.chartImageBase64?.trim();
-  const chartImagesBase64 = Array.isArray(body.chartImagesBase64)
-    ? body.chartImagesBase64
-    : undefined;
   const requestId = body.requestId?.trim();
-
-  if (!threadId) {
-    return new ChatbotError("bad_request:api", "Invalid preview request").toResponse();
+  if (!requestId) {
+    return new ChatbotError("bad_request:api", "requestId is required").toResponse();
   }
 
-  const backendResponse = await fetch(`${BACKEND_API_BASE_URL}/api/v1/pptx/preview`, {
+  const backendResponse = await fetch(`${BACKEND_API_BASE_URL}/api/v1/pptx/cancel`, {
     method: "POST",
     headers: withForwardedAuthHeaders(request, {
       "Content-Type": "application/json",
     }),
     body: JSON.stringify({
-      thread_id: threadId,
-      message_id: messageId,
-      chart_image_base64: chartImageBase64,
-      chart_images_base64: chartImagesBase64,
       request_id: requestId,
     }),
   });
@@ -61,13 +46,13 @@ export async function POST(request: Request) {
 
     return new ChatbotError(
       "bad_request:api",
-      backendDetail || "PPT preview failed"
+      backendDetail || "Failed to cancel PPT generation"
     ).toResponse();
   }
 
-  const payload = (await backendResponse.json()) as {
-    slides?: Array<Record<string, unknown>>;
-  };
+  const payload = (await backendResponse.json().catch(() => null)) as
+    | { cancelled?: boolean }
+    | null;
 
-  return Response.json(payload);
+  return Response.json({ cancelled: Boolean(payload?.cancelled) });
 }

@@ -127,7 +127,6 @@ export function setStoredIdToken(token: string): void {
   window.dispatchEvent(new Event(AUTH_TOKEN_UPDATED_EVENT));
 
   authDebugLog("info", "Stored token in sessionStorage and localStorage", {
-    token,
     tokenLength: token.length,
   });
 }

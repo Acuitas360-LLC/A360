@@ -253,6 +253,10 @@ type PptResponse = {
   filename?: string;
 };
 
+type PptCancelPayload = {
+  requestId: string;
+};
+
 type PlotlyFigure = {
   data?: unknown[];
   layout?: Record<string, unknown>;
@@ -369,7 +373,9 @@ async function requestPpt(
   chatId: string,
   messageId?: string,
   chartImageBase64?: string,
-  chartImagesBase64?: string[]
+  chartImagesBase64?: string[],
+  requestId?: string,
+  signal?: AbortSignal
 ): Promise<PptResponse> {
   const response = await fetch("/api/ppt", {
     method: "POST",
@@ -383,7 +389,9 @@ async function requestPpt(
       messageId,
       chartImageBase64,
       chartImagesBase64,
+      requestId,
     }),
+    signal,
   });
 
   if (!response.ok) {
@@ -402,7 +410,9 @@ async function requestPptPreview(
   chatId: string,
   messageId?: string,
   chartImageBase64?: string,
-  chartImagesBase64?: string[]
+  chartImagesBase64?: string[],
+  requestId?: string,
+  signal?: AbortSignal
 ): Promise<PptPreviewSlide[]> {
   const response = await fetch("/api/ppt/preview", {
     method: "POST",
@@ -414,7 +424,9 @@ async function requestPptPreview(
       messageId,
       chartImageBase64,
       chartImagesBase64,
+      requestId,
     }),
+    signal,
   });
 
   if (!response.ok) {
@@ -424,6 +436,30 @@ async function requestPptPreview(
 
   const payload = (await response.json()) as { slides?: PptPreviewSlide[] };
   return payload.slides ?? [];
+}
+
+async function requestPptCancel(payload: PptCancelPayload): Promise<void> {
+  await fetch("/api/ppt/cancel", {
+    method: "POST",
+    headers: withBrowserAuthHeaders({
+      "Content-Type": "application/json",
+    }),
+    body: JSON.stringify({
+      requestId: payload.requestId,
+    }),
+  });
+}
+
+function createPptRequestId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `ppt_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 async function patchVoteWithRetry(payload: VotePatchPayload): Promise<Response> {
@@ -509,6 +545,20 @@ export function PureMessageActions({
   ]);
   const [showPptStages, setShowPptStages] = useState(false);
   const [pptDotStep, setPptDotStep] = useState(0);
+  const pptControllersRef = useRef<
+    Record<
+      PptMode,
+      {
+        preview?: AbortController;
+        ppt?: AbortController;
+        previewRequestId?: string;
+        pptRequestId?: string;
+      }
+    >
+  >({
+    slide: {},
+    deck: {},
+  });
 
   const assistantMessageId = message.parts
     ?.find((part) => part.type === "data-assistantMessageId") as
@@ -623,6 +673,16 @@ export function PureMessageActions({
     setActivePptMenu(mode);
     setPreviewMode(mode);
     const tracker = startPptStatusTracker(setStatus, setStageLabels);
+    const previewController = new AbortController();
+    const pptController = new AbortController();
+    const previewRequestId = createPptRequestId();
+    const pptRequestId = createPptRequestId();
+    pptControllersRef.current[mode] = {
+      preview: previewController,
+      ppt: pptController,
+      previewRequestId,
+      pptRequestId,
+    };
 
     try {
       const messageId = mode === "slide" ? pptMessageId : undefined;
@@ -634,7 +694,9 @@ export function PureMessageActions({
         chatId,
         messageId,
         chartImageBase64,
-        chartImagesBase64
+        chartImagesBase64,
+        previewRequestId,
+        previewController.signal
       ).then(
         (slides) => {
           tracker.markPreviewReady(slides.length);
@@ -647,7 +709,9 @@ export function PureMessageActions({
         chatId,
         messageId,
         chartImageBase64,
-        chartImagesBase64
+        chartImagesBase64,
+        pptRequestId,
+        pptController.signal
       ).then(
         (pptx) => {
           tracker.markPptReady();
@@ -664,6 +728,11 @@ export function PureMessageActions({
       setStatus("Ready.");
       toast.success("Slide Deck Generated.");
     } catch (error) {
+      if (isAbortError(error)) {
+        tracker.stop();
+        setStatus("Cancelled.");
+        return;
+      }
       const messageText =
         error instanceof Error ? error.message : "PPT generation failed";
       toast.error(messageText);
@@ -671,7 +740,35 @@ export function PureMessageActions({
       setStatus("Generation failed. Please try again.");
     } finally {
       setLoading(false);
+      pptControllersRef.current[mode] = {};
     }
+  };
+
+  const handlePptCancel = async (mode: PptMode) => {
+    const controllers = pptControllersRef.current[mode];
+    controllers.preview?.abort();
+    controllers.ppt?.abort();
+
+    const requestIds = [
+      controllers.previewRequestId,
+      controllers.pptRequestId,
+    ].filter(Boolean) as string[];
+
+    await Promise.all(requestIds.map((requestId) => requestPptCancel({ requestId })));
+    pptControllersRef.current[mode] = {};
+
+    if (mode === "slide") {
+      setIsGeneratingSlide(false);
+      setSlideStatusText("Cancelled.");
+    } else {
+      setIsGeneratingDeck(false);
+      setDeckStatusText("Cancelled.");
+    }
+
+    setActivePptMenu(null);
+    setPreviewMode(null);
+    setShowPptStages(false);
+    toast.info("PPT generation cancelled.");
   };
 
   const handlePptOpen = async (mode: PptMode, disposition: PptDisposition) => {
@@ -899,9 +996,30 @@ export function PureMessageActions({
 
       {activePptMenu && (
         <div className="response-evidence mt-2 w-full p-3">
-          <p className="mb-2 font-medium text-sm">
-            {activePptMenu === "slide" ? "Create slide" : "Create deck"}
-          </p>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="font-medium text-sm">
+              {activePptMenu === "slide" ? "Create slide" : "Create deck"}
+            </p>
+            <button
+              className="-mr-1 inline-flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+              onClick={() => {
+                if (
+                  activePptMenu === "slide" ? isGeneratingSlide : isGeneratingDeck
+                ) {
+                  handlePptCancel(activePptMenu);
+                  return;
+                }
+
+                setActivePptMenu(null);
+                setPreviewMode(null);
+                setShowPptStages(false);
+              }}
+              type="button"
+              aria-label="Close"
+            >
+              &#x2715;
+            </button>
+          </div>
           {(activePptMenu === "slide" ? isGeneratingSlide : isGeneratingDeck) ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
@@ -914,13 +1032,23 @@ export function PureMessageActions({
                     </span>
                   </span>
                 </p>
-                <button
-                  className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                  onClick={() => setShowPptStages((current) => !current)}
-                  type="button"
-                >
-                  {showPptStages ? "Hide steps" : "Show steps"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={() => setShowPptStages((current) => !current)}
+                    type="button"
+                  >
+                    {showPptStages ? "Hide steps" : "Show steps"}
+                  </button>
+                  <Button
+                    onClick={() => handlePptCancel(activePptMenu)}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
               {showPptStages && (
                 <ol className="space-y-2 rounded-md border border-border/60 bg-muted/10 px-3 py-2">
