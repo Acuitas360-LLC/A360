@@ -1,4 +1,6 @@
 import { ChatbotError } from "@/lib/errors";
+import type { ChatMessage } from "@/lib/types";
+import { attachBackendMessageIds } from "@/lib/utils";
 import { withForwardedAuthHeaders } from "@/lib/server/auth-forward";
 
 const BACKEND_API_BASE_URL =
@@ -42,5 +44,9 @@ export async function GET(
   const payload = (await backendResponse.json()) as HistoryMessagesPayload;
   const messages = Array.isArray(payload.messages) ? payload.messages : [];
 
-  return Response.json({ messages });
+  return Response.json({
+    messages: attachBackendMessageIds(messages as ChatMessage[], {
+      fallbackToMessageId: true,
+    }),
+  });
 }

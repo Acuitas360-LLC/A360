@@ -209,7 +209,47 @@ export function convertToUIMessages(messages: DBMessage[]): ChatMessage[] {
     metadata: {
       createdAt: formatISO(message.createdAt),
     },
+    backendMessageId: message.id,
   }));
+}
+
+export function extractBackendMessageIdFromParts(
+  parts: ChatMessage['parts'] | undefined,
+): string | undefined {
+  const assistantIdPart = parts?.find(
+    (part) => part.type === 'data-assistantMessageId',
+  ) as { type: 'data-assistantMessageId'; data?: string } | undefined;
+
+  const raw = assistantIdPart?.data?.trim();
+  return raw || undefined;
+}
+
+export function attachBackendMessageId(
+  message: ChatMessage,
+  options?: { fallbackToMessageId?: boolean },
+): ChatMessage {
+  const existing = message.backendMessageId?.trim();
+  if (existing) {
+    return message;
+  }
+
+  const fromParts = extractBackendMessageIdFromParts(message.parts);
+  if (fromParts) {
+    return { ...message, backendMessageId: fromParts };
+  }
+
+  if (options?.fallbackToMessageId) {
+    return { ...message, backendMessageId: message.id };
+  }
+
+  return message;
+}
+
+export function attachBackendMessageIds(
+  messages: ChatMessage[],
+  options?: { fallbackToMessageId?: boolean },
+): ChatMessage[] {
+  return messages.map((message) => attachBackendMessageId(message, options));
 }
 
 export function getTextFromMessage(message: ChatMessage | UIMessage): string {

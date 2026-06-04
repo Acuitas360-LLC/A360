@@ -5,6 +5,7 @@ import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { withForwardedAuthHeaders } from "@/lib/server/auth-forward";
+import { attachBackendMessageIds } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/types";
 
 const BACKEND_API_BASE_URL =
@@ -25,7 +26,8 @@ async function getInitialMessages(chatId: string, authHeaders?: HeadersInit): Pr
     }
 
     const payload = (await response.json()) as { messages?: ChatMessage[] };
-    return Array.isArray(payload.messages) ? payload.messages : [];
+    const messages = Array.isArray(payload.messages) ? payload.messages : [];
+    return attachBackendMessageIds(messages, { fallbackToMessageId: true });
   } catch {
     return [];
   }

@@ -1,4 +1,5 @@
 import { withBrowserAuthHeaders } from "@/lib/iframe-auth";
+import { attachBackendMessageIds } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/types";
 
 const MAX_CACHED_THREADS = 12;
@@ -51,15 +52,18 @@ async function fetchThreadMessages(threadId: string): Promise<ChatMessage[]> {
 
   const payload = (await response.json()) as { messages?: ChatMessage[] };
   const messages = Array.isArray(payload.messages) ? payload.messages : [];
+  const normalizedMessages = attachBackendMessageIds(messages, {
+    fallbackToMessageId: true,
+  });
 
   if (process.env.NODE_ENV !== "production") {
     console.debug("[thread-prefetch] fetch:done", {
       threadId,
-      messageCount: messages.length,
+      messageCount: normalizedMessages.length,
     });
   }
 
-  return messages;
+  return normalizedMessages;
 }
 
 export function getCachedThreadMessages(threadId: string): ChatMessage[] | null {

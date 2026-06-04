@@ -7,6 +7,7 @@ import { useCopyToClipboard } from "usehooks-ts";
 import type { Vote } from "@/lib/db/schema";
 import { withBrowserAuthHeaders } from "@/lib/iframe-auth";
 import type { ChatMessage } from "@/lib/types";
+import { extractBackendMessageIdFromParts } from "@/lib/utils";
 import { Action, Actions } from "./elements/actions";
 import {
   AttachmentIcon,
@@ -560,11 +561,9 @@ export function PureMessageActions({
     deck: {},
   });
 
-  const assistantMessageId = message.parts
-    ?.find((part) => part.type === "data-assistantMessageId") as
-    | { type: "data-assistantMessageId"; data: string }
-    | undefined;
-  const pptMessageId = assistantMessageId?.data?.trim() || message.id;
+  const backendMessageId =
+    message.backendMessageId ?? extractBackendMessageIdFromParts(message.parts);
+  const pptMessageId = backendMessageId || message.id;
 
   const textFromParts = message.parts
     ?.filter((part) => part.type === "text")
@@ -573,6 +572,10 @@ export function PureMessageActions({
     .trim();
 
   const persistVoteState = (isUpvoted: boolean) => {
+    if (!backendMessageId) {
+      return;
+    }
+
     mutate<Vote[]>(
       `/api/vote?chatId=${chatId}`,
       (currentVotes) => {
@@ -581,14 +584,14 @@ export function PureMessageActions({
         }
 
         const votesWithoutCurrent = currentVotes.filter(
-          (currentVote) => currentVote.messageId !== message.id
+          (currentVote) => currentVote.messageId !== backendMessageId
         );
 
         return [
           ...votesWithoutCurrent,
           {
             chatId,
-            messageId: message.id,
+            messageId: backendMessageId,
             isUpvoted,
           },
         ];
@@ -857,14 +860,19 @@ export function PureMessageActions({
 
       <Action
         data-testid="message-upvote"
-        disabled={hasSubmittedFeedback}
+        disabled={hasSubmittedFeedback || !backendMessageId}
         onClick={() => {
+          if (!backendMessageId) {
+            toast.error("Vote is not ready yet. Please try again shortly.");
+            return;
+          }
+
           // Optimistic update so UI reflects the vote instantly.
           persistVoteState(true);
 
           const upvote = patchVoteWithRetry({
             chatId,
-            messageId: message.id,
+            messageId: backendMessageId,
             phase: "rating_only",
             type: "up",
           });
@@ -882,14 +890,19 @@ export function PureMessageActions({
 
       <Action
         data-testid="message-downvote"
-        disabled={hasSubmittedFeedback}
+        disabled={hasSubmittedFeedback || !backendMessageId}
         onClick={() => {
+          if (!backendMessageId) {
+            toast.error("Vote is not ready yet. Please try again shortly.");
+            return;
+          }
+
           // Optimistic update so UI reflects the vote instantly.
           persistVoteState(false);
 
           const downvote = patchVoteWithRetry({
             chatId,
-            messageId: message.id,
+            messageId: backendMessageId,
             phase: "rating_only",
             type: "down",
           });
@@ -948,18 +961,23 @@ export function PureMessageActions({
 
                 setIsSubmittingDownvoteFeedback(true);
                 try {
+                  if (!backendMessageId) {
+                    toast.error("Vote is not ready yet. Please try again shortly.");
+                    return;
+                  }
+
                   // Trigger feedback query immediately; persist feedback text in parallel.
                   onNegativeFeedbackRetry?.(
                     previousUserQuery,
                     trimmed,
-                    message.id
+                    backendMessageId
                   );
                   setShowDownvoteFeedback(false);
                   setFeedbackText("");
 
                   const saveFeedbackPromise = patchVoteWithRetry({
                     chatId,
-                    messageId: message.id,
+                    messageId: backendMessageId,
                     phase: "feedback_only",
                     type: "down",
                     feedbackText: trimmed,

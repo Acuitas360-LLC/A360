@@ -3,6 +3,7 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { useEffect, useRef } from "react";
 import { useDataStream } from "@/components/data-stream-provider";
+import { attachBackendMessageId } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/types";
 
 export type UseAutoResumeParams = {
@@ -31,7 +32,7 @@ export function useAutoResume({
 
     if (dataPart.type === "data-appendMessage") {
       try {
-        const message = JSON.parse(dataPart.data);
+        const message = attachBackendMessageId(JSON.parse(dataPart.data));
         setMessagesRef.current((currentMessages) => {
           if (currentMessages.some((current) => current.id === message.id)) {
             return currentMessages;

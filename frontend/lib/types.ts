@@ -63,7 +63,9 @@ export type ChatMessage = UIMessage<
   MessageMetadata,
   CustomUIDataTypes,
   ChatTools
->;
+> & {
+  backendMessageId?: string;
+};
 
 export type Attachment = {
   name: string;
