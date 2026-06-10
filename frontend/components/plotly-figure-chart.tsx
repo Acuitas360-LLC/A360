@@ -36,22 +36,6 @@ function getTitleText(layout: Record<string, unknown> | undefined): string {
   return "";
 }
 
-function getLegendRowsEstimate(traceCount: number, avgLegendLabelLength: number): number {
-  if (traceCount <= 1) {
-    return 1;
-  }
-
-  if (traceCount <= 3 && avgLegendLabelLength <= 18) {
-    return 1;
-  }
-
-  if (traceCount <= 6 && avgLegendLabelLength <= 14) {
-    return 2;
-  }
-
-  return 3;
-}
-
 function getMarginValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
@@ -145,24 +129,12 @@ export function PlotlyFigureChart({
 
   const isNormalized = mode === "normalized";
   const forceDateAxis = hasTimestampLikeX(preparedFigure.data);
-  const traceCount = preparedFigure.data.length;
 
   const titleText = getTitleText(
     preparedFigure.layout as Record<string, unknown> | undefined
   );
   const titleLineEstimate = Math.max(1, Math.ceil(titleText.length / 70));
 
-  const avgLegendLabelLength = Math.round(
-    (preparedFigure.data as Array<Record<string, unknown>>).reduce((sum: number, trace) => {
-      const traceName =
-        typeof (trace as { name?: unknown }).name === "string"
-          ? ((trace as { name: string }).name ?? "")
-          : "";
-      return sum + traceName.length;
-    }, 0) / Math.max(1, traceCount)
-  );
-
-  const useVerticalLegend = traceCount >= 6 || (traceCount >= 4 && avgLegendLabelLength >= 22);
   const hasSecondaryYAxis = Boolean(
     preparedFigure.layout &&
       typeof (preparedFigure.layout as { yaxis2?: unknown }).yaxis2 === "object"
@@ -170,28 +142,26 @@ export function PlotlyFigureChart({
   const normalizedLayout = stripFixedLayoutSize(
     preparedFigure.layout as Record<string, unknown> | undefined
   );
-  const legendRowsEstimate = getLegendRowsEstimate(traceCount, avgLegendLabelLength);
   const layoutMargin =
     normalizedLayout &&
     typeof (normalizedLayout as { margin?: unknown }).margin === "object"
       ? ((normalizedLayout as { margin?: Record<string, unknown> }).margin ?? {})
       : {};
-  const topMargin = 56 + titleLineEstimate * 20 + (useVerticalLegend ? 8 : legendRowsEstimate * 24);
+  const topMargin = 56 + titleLineEstimate * 18;
   const rightMargin = Math.max(
-    useVerticalLegend ? 232 : hasSecondaryYAxis ? 112 : 36,
+    hasSecondaryYAxis ? 96 : 36,
     getMarginValue((layoutMargin as { r?: unknown }).r)
   );
   const leftMargin = Math.max(40, getMarginValue((layoutMargin as { l?: unknown }).l));
-  const bottomMargin = Math.max(120, getMarginValue((layoutMargin as { b?: unknown }).b));
+  const bottomMargin = Math.max(72, getMarginValue((layoutMargin as { b?: unknown }).b));
   const resolvedTopMargin = Math.max(
     topMargin,
     getMarginValue((layoutMargin as { t?: unknown }).t)
   );
-  const boundedTopMargin = Math.min(resolvedTopMargin, 176);
-  const boundedBottomMargin = Math.min(bottomMargin, 124);
-  const boundedRightMargin = Math.min(rightMargin, useVerticalLegend ? 280 : 168);
+  const boundedTopMargin = Math.min(resolvedTopMargin, 120);
+  const boundedBottomMargin = Math.min(bottomMargin, 96);
+  const boundedRightMargin = Math.min(rightMargin, 120);
   const boundedLeftMargin = Math.min(leftMargin, 72);
-  const legendEntryWidth = Math.max(120, Math.min(260, avgLegendLabelLength * 8));
 
   const layout = useMemo(
     () => ({
@@ -267,30 +237,6 @@ export function PlotlyFigureChart({
                   },
                 }
               : {}),
-            legend: {
-              ...(typeof (normalizedLayout as any)?.legend === "object"
-                ? (normalizedLayout as any).legend
-                : {}),
-              ...(useVerticalLegend
-                ? {
-                    orientation: "v",
-                    x: 1.02,
-                    y: 1,
-                    xanchor: "left",
-                    yanchor: "top",
-                  }
-                : {
-                    orientation: "h",
-                    x: 0,
-                    y: 1.1,
-                    xanchor: "left",
-                    yanchor: "bottom",
-                    entrywidthmode: "pixels",
-                    entrywidth: legendEntryWidth,
-                  }),
-              bgcolor: "rgba(255,255,255,0.0)",
-              borderwidth: 0,
-            },
           }
         : {}),
       margin: {
@@ -308,8 +254,6 @@ export function PlotlyFigureChart({
       boundedRightMargin,
       boundedTopMargin,
       boundedBottomMargin,
-      useVerticalLegend,
-      legendEntryWidth,
       hasSecondaryYAxis,
     ]
   );
